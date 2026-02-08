@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: rgb(241 245 249);
+  background:
+    radial-gradient(900px circle at 15% 0%, rgba(34, 211, 238, 0.18), transparent 55%),
+    radial-gradient(800px circle at 90% 10%, rgba(251, 191, 36, 0.14), transparent 55%),
+    radial-gradient(700px circle at 50% 120%, rgba(244, 63, 94, 0.10), transparent 60%),
+    linear-gradient(180deg, #05070d 0%, #070b14 50%, #05070d 100%);
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.10;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.06) 0px,
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px,
+      transparent 10px
+    );
+  mix-blend-mode: overlay;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+@layer components {
+  .surface {
+    @apply rounded-xl bg-black/40 ring-1 ring-white/10 backdrop-blur-md;
+  }
+
+  .surface-strong {
+    @apply rounded-xl bg-black/60 ring-1 ring-white/15 backdrop-blur-md;
+  }
+
+  .btn {
+    @apply touch-target inline-flex items-center justify-center gap-2 rounded-xl font-extrabold tracking-wide transition active:scale-[0.99];
+  }
+
+  .btn-primary {
+    @apply btn bg-cyan-300 text-black hover:bg-cyan-200;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white/10 text-white hover:bg-white/15 ring-1 ring-white/15;
+  }
+
+  .btn-danger {
+    @apply btn bg-rose-500/90 text-white hover:bg-rose-500 ring-1 ring-white/10;
+  }
+
+  .field {
+    @apply w-full rounded-xl bg-black/30 text-white px-4 py-3 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-300/60;
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  .rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+
+  .animate-reveal {
+    animation: revealFlip 0.6s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+    transform-origin: center;
+  }
+
+  @keyframes revealFlip {
+    0% {
+      transform: rotateY(0);
+      opacity: 1;
+    }
+    100% {
+      transform: rotateY(-180deg);
+      opacity: 0;
+    }
+  }
+
+  .animate-fade-out {
+    animation: fadeOut 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0);
+    }
+  }
+}
