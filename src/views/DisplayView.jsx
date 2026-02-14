@@ -7,6 +7,22 @@ import GridOverlay from '../components/GridOverlay';
 const DisplayView = () => {
   const { state, presence } = useQuiz();
 
+  if (state.isPlaceholder) {
+    return (
+      <div className="h-screen w-screen bg-black overflow-hidden relative">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-500/15 via-black to-black" />
+        <div className="relative h-full w-full flex items-center justify-center p-4">
+          <div className="surface-strong p-6 text-center max-w-md w-full">
+            <h2 className="text-white text-2xl font-black mb-2">Waiting for controller...</h2>
+            <p className="text-white/70 text-sm">
+              Keep this display open. It will sync automatically when the quiz master connects.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const currentQuestion = state.questions[state.currentQuestionIndex];
 
   if (!currentQuestion) {
@@ -24,7 +40,7 @@ const DisplayView = () => {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-500/15 via-black to-black" />
 
       <div className="relative w-full h-full flex items-center justify-center p-8">
-        <div className="relative w-full max-w-[120vh] aspect-square shadow-2xl rounded-xl overflow-hidden ring-1 ring-white/10">
+        <div className="relative w-[calc(100vw-4rem)] h-[calc(100vh-4rem)] shadow-2xl rounded-xl overflow-hidden ring-1 ring-white/10">
           {currentQuestion.type === 'video' ? (
             <VideoDisplay
               url={currentQuestion.videoUrl}

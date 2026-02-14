@@ -65,8 +65,9 @@ const SetupView = () => {
 
         <div className="surface-strong p-6 space-y-6">
           <div>
-            <label className="block text-white font-bold mb-2">Username</label>
+            <label htmlFor="setup-username" className="block text-white font-bold mb-2">Username</label>
             <input
+              id="setup-username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -76,8 +77,9 @@ const SetupView = () => {
           </div>
 
           <div>
-            <label className="block text-white font-bold mb-2">Quiz Name</label>
+            <label htmlFor="setup-quiz-name" className="block text-white font-bold mb-2">Quiz Name</label>
             <input
+              id="setup-quiz-name"
               type="text"
               value={quizName}
               onChange={(e) => setQuizName(e.target.value)}

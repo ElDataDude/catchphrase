@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { saveQuiz } from '../utils/storage';
 
 const QuizContext = createContext(null);
@@ -122,18 +122,52 @@ const quizReducer = (state, action) => {
   }
 };
 
-export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => {
+const createClientId = () => {
+  if (typeof crypto !== 'undefined' && crypto?.randomUUID) return crypto.randomUUID();
+  return `client_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
+const createHostPeerId = (quizId) => {
+  const shortQuizId = String(quizId || 'quiz').replace(/[^a-zA-Z0-9]/g, '').slice(-12);
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `host_${shortQuizId}_${suffix}`;
+};
+
+export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostPeerId = null }) => {
   const [state, dispatch] = useReducer(quizReducer, initialQuiz);
   const channelRef = useRef(null);
+  const peerRef = useRef(null);
+  const peerConnectionsRef = useRef(new Map());
+  const displayConnRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
   const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
-  const peersRef = useRef(new Map());
+  const localPeersRef = useRef(new Map());
+  const remotePresenceRef = useRef({ controller: 0, display: 0 });
   const [presence, setPresence] = useState({ controller: 0, display: 0 });
+  const [syncStatus, setSyncStatus] = useState('local');
 
-  const clientId = useMemo(() => {
-    if (typeof crypto !== 'undefined' && crypto?.randomUUID) return crypto.randomUUID();
-    return `client_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  }, []);
+  const clientId = useMemo(() => createClientId(), []);
+
+  const resolvedHostPeerId = useMemo(() => {
+    if (!initialQuiz?.id) return hostPeerId;
+    if (role !== 'controller') return hostPeerId;
+
+    if (typeof window === 'undefined') return hostPeerId;
+
+    const key = `catchphrase_host_peer_${initialQuiz.id}`;
+    if (hostPeerId) {
+      localStorage.setItem(key, hostPeerId);
+      return hostPeerId;
+    }
+
+    const stored = localStorage.getItem(key);
+    if (stored) return stored;
+
+    const generated = createHostPeerId(initialQuiz.id);
+    localStorage.setItem(key, generated);
+    return generated;
+  }, [initialQuiz?.id, role, hostPeerId]);
 
   const channelName = useMemo(() => {
     const id = initialQuiz?.id || state?.id || 'unknown';
@@ -144,14 +178,29 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => 
     stateRef.current = state;
   }, [state]);
 
-  const refreshPresence = () => {
+  const refreshPresence = useCallback(() => {
     const counts = { controller: 0, display: 0 };
-    for (const role of peersRef.current.values()) {
-      if (role === 'controller') counts.controller += 1;
-      if (role === 'display') counts.display += 1;
+    for (const localRole of localPeersRef.current.values()) {
+      if (localRole === 'controller') counts.controller += 1;
+      if (localRole === 'display') counts.display += 1;
     }
+    counts.controller += remotePresenceRef.current.controller;
+    counts.display += remotePresenceRef.current.display;
     setPresence(counts);
-  };
+  }, []);
+
+  const applySyncedState = useCallback((newState) => {
+    if (!newState || !newState.id) return;
+
+    const expectedId = initialQuiz?.id || stateRef.current?.id;
+    if (expectedId && newState.id !== expectedId) return;
+
+    isRemoteUpdate.current = true;
+    dispatch({
+      type: 'LOAD_QUIZ',
+      payload: { ...newState, isPlaceholder: false }
+    });
+  }, [dispatch, initialQuiz?.id]);
 
   // Initialize BroadcastChannel
   useEffect(() => {
@@ -175,16 +224,16 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => 
     const trackPeer = (sender, senderRole) => {
       if (!sender || sender === clientId) return;
       if (!senderRole) return;
-      const prev = peersRef.current.get(sender);
+      const prev = localPeersRef.current.get(sender);
       if (prev === senderRole) return;
-      peersRef.current.set(sender, senderRole);
+      localPeersRef.current.set(sender, senderRole);
       refreshPresence();
     };
 
     const untrackPeer = (sender) => {
       if (!sender || sender === clientId) return;
-      if (!peersRef.current.has(sender)) return;
-      peersRef.current.delete(sender);
+      if (!localPeersRef.current.has(sender)) return;
+      localPeersRef.current.delete(sender);
       refreshPresence();
     };
 
@@ -220,11 +269,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => 
       }
 
       if (msg.type === 'SYNC_STATE_UPDATE') {
-        const newState = msg.payload;
-        if (!newState) return;
-        if (quizId && newState.id && newState.id !== quizId) return;
-        isRemoteUpdate.current = true;
-        dispatch({ type: 'LOAD_QUIZ', payload: newState });
+        applySyncedState(msg.payload);
         return;
       }
     };
@@ -245,7 +290,187 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => 
         channelRef.current.close();
       }
     };
-  }, [channelName, clientId, initialQuiz?.id, role]); // Only re-init if quiz/role changes
+  }, [applySyncedState, channelName, clientId, initialQuiz?.id, refreshPresence, role]); // Only re-init if quiz/role changes
+
+  // WebRTC sync for cross-device control/display.
+  useEffect(() => {
+    if (!initialQuiz?.id || typeof window === 'undefined') return;
+
+    let isCancelled = false;
+
+    const recalcRemotePresence = () => {
+      if (role === 'controller') {
+        let openDisplays = 0;
+        for (const conn of peerConnectionsRef.current.values()) {
+          if (conn?.open) openDisplays += 1;
+        }
+        remotePresenceRef.current.display = openDisplays;
+      } else {
+        remotePresenceRef.current.controller = displayConnRef.current?.open ? 1 : 0;
+      }
+      refreshPresence();
+    };
+
+    const clearReconnect = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = (connectFn) => {
+      clearReconnect();
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (!isCancelled) connectFn();
+      }, 1200);
+    };
+
+    const handleIncomingMessage = (message, conn) => {
+      if (!message || typeof message !== 'object') return;
+
+      if (message.type === 'REQUEST_SYNC' && role === 'controller') {
+        const latest = stateRef.current;
+        if (latest && conn?.open) {
+          try {
+            conn.send({ type: 'SYNC_STATE_UPDATE', payload: latest });
+          } catch {
+            // no-op
+          }
+        }
+        return;
+      }
+
+      if (message.type === 'SYNC_STATE_UPDATE') {
+        applySyncedState(message.payload);
+      }
+    };
+
+    const attachConnectionEvents = (conn, { onDisconnect }) => {
+      conn.on('data', (message) => handleIncomingMessage(message, conn));
+      conn.on('error', () => onDisconnect());
+      conn.on('close', () => onDisconnect());
+    };
+
+    const setupPeer = async () => {
+      try {
+        const { default: Peer } = await import('peerjs');
+        if (isCancelled) return;
+
+        const peer =
+          role === 'controller'
+            ? new Peer(resolvedHostPeerId)
+            : new Peer();
+
+        peerRef.current = peer;
+
+        if (role === 'controller') {
+          setSyncStatus('connecting');
+          peer.on('open', () => {
+            if (isCancelled) return;
+            setSyncStatus('ready');
+          });
+
+          peer.on('connection', (conn) => {
+            peerConnectionsRef.current.set(conn.peer, conn);
+
+            attachConnectionEvents(conn, {
+              onDisconnect: () => {
+                peerConnectionsRef.current.delete(conn.peer);
+                recalcRemotePresence();
+                if (peerConnectionsRef.current.size === 0) {
+                  setSyncStatus('ready');
+                }
+              }
+            });
+
+            conn.on('open', () => {
+              recalcRemotePresence();
+              setSyncStatus('connected');
+              const latest = stateRef.current;
+              if (latest) {
+                try {
+                  conn.send({ type: 'SYNC_STATE_UPDATE', payload: latest });
+                } catch {
+                  // no-op
+                }
+              }
+            });
+          });
+        } else if (resolvedHostPeerId) {
+          setSyncStatus('connecting');
+
+          const connectToController = () => {
+            if (!peerRef.current || isCancelled) return;
+            const conn = peerRef.current.connect(resolvedHostPeerId, { reliable: true });
+            displayConnRef.current = conn;
+
+            attachConnectionEvents(conn, {
+              onDisconnect: () => {
+                if (displayConnRef.current === conn) {
+                  displayConnRef.current = null;
+                }
+                recalcRemotePresence();
+                setSyncStatus('connecting');
+                scheduleReconnect(connectToController);
+              }
+            });
+
+            conn.on('open', () => {
+              clearReconnect();
+              recalcRemotePresence();
+              setSyncStatus('connected');
+              try {
+                conn.send({ type: 'REQUEST_SYNC' });
+              } catch {
+                // no-op
+              }
+            });
+          };
+
+          peer.on('open', () => {
+            if (isCancelled) return;
+            connectToController();
+          });
+        }
+
+        peer.on('error', () => {
+          setSyncStatus('error');
+        });
+      } catch {
+        setSyncStatus('error');
+      }
+    };
+
+    setupPeer();
+
+    return () => {
+      isCancelled = true;
+      clearReconnect();
+      if (displayConnRef.current) {
+        displayConnRef.current.close();
+        displayConnRef.current = null;
+      }
+      for (const conn of peerConnectionsRef.current.values()) {
+        try {
+          conn.close();
+        } catch {
+          // no-op
+        }
+      }
+      peerConnectionsRef.current.clear();
+      if (peerRef.current) {
+        try {
+          peerRef.current.destroy();
+        } catch {
+          // no-op
+        }
+        peerRef.current = null;
+      }
+      remotePresenceRef.current = { controller: 0, display: 0 };
+      refreshPresence();
+      setSyncStatus('local');
+    };
+  }, [applySyncedState, initialQuiz?.id, refreshPresence, resolvedHostPeerId, role]);
 
   // Auto-save to LocalStorage on state changes (debounced)
   // AND broadcast changes to other tabs
@@ -264,6 +489,15 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => 
         type: 'SYNC_STATE_UPDATE',
         payload: state
       });
+
+      for (const conn of peerConnectionsRef.current.values()) {
+        if (!conn?.open) continue;
+        try {
+          conn.send({ type: 'SYNC_STATE_UPDATE', payload: state });
+        } catch {
+          // no-op
+        }
+      }
     }
 
     // Reset remote update flag for next cycle
@@ -277,7 +511,15 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller' }) => 
   }, [state, clientId, role]);
 
   return (
-    <QuizContext.Provider value={{ state, dispatch, presence }}>
+    <QuizContext.Provider
+      value={{
+        state,
+        dispatch,
+        presence,
+        hostPeerId: resolvedHostPeerId,
+        syncStatus
+      }}
+    >
       {children}
     </QuizContext.Provider>
   );

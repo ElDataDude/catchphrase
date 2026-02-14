@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { QuizProvider } from '../contexts/QuizContext';
 import { loadQuiz } from '../utils/storage';
+import { createEmptyQuestion } from '../utils/quizHelpers';
 import ControllerView from './ControllerView';
 import DisplayView from './DisplayView';
 
@@ -13,11 +14,26 @@ const QuizView = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const viewMode = searchParams.get('view') || 'controller';
+  const hostPeerId = searchParams.get('host');
 
   useEffect(() => {
     const loadedQuiz = loadQuiz(quizId);
 
     if (!loadedQuiz) {
+      if (viewMode === 'display' && hostPeerId) {
+        setQuiz({
+          id: quizId,
+          username: 'remote',
+          name: 'Connecting...',
+          createdAt: new Date().toISOString(),
+          questions: [createEmptyQuestion('')],
+          currentQuestionIndex: 0,
+          viewMode: 'display',
+          isPlaceholder: true
+        });
+        setIsLoading(false);
+        return;
+      }
       setQuiz(null);
       setIsLoading(false);
       return;
@@ -25,7 +41,7 @@ const QuizView = () => {
 
     setQuiz(loadedQuiz);
     setIsLoading(false);
-  }, [quizId, navigate]);
+  }, [quizId, viewMode, hostPeerId, navigate]);
 
   if (isLoading) {
     return (
@@ -55,7 +71,11 @@ const QuizView = () => {
   }
 
   return (
-    <QuizProvider initialQuiz={quiz} role={viewMode === 'display' ? 'display' : 'controller'}>
+    <QuizProvider
+      initialQuiz={quiz}
+      role={viewMode === 'display' ? 'display' : 'controller'}
+      hostPeerId={hostPeerId}
+    >
       {viewMode === 'display' ? <DisplayView /> : <ControllerView />}
     </QuizProvider>
   );

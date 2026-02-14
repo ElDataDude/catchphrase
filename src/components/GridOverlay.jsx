@@ -40,9 +40,9 @@ const GridOverlay = ({ interactive = false, showNumbers = false }) => {
             className={`
               relative flex items-center justify-center
               preserve-3d transition-transform duration-700
-              ${isRevealed ? 'animate-reveal' : 'bg-black/70'}
-              ${interactive && !isRevealed ? 'cursor-pointer hover:bg-black/60' : ''}
-              ${!isRevealed ? 'ring-1 ring-white/10 shadow-inner' : ''}
+              ${isRevealed ? 'animate-reveal' : 'bg-black'}
+              ${interactive && !isRevealed ? 'cursor-pointer hover:bg-zinc-950' : ''}
+              ${!isRevealed ? 'ring-1 ring-white/15 shadow-inner' : ''}
             `}
             onClick={interactive ? () => handleSquareClick(squareNumber) : undefined}
             style={{
@@ -58,8 +58,7 @@ const GridOverlay = ({ interactive = false, showNumbers = false }) => {
                     {sequenceNum}
                   </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.08),transparent_60%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[linear-gradient(135deg,#0a0a0a_25%,#050505_25%,#050505_50%,#0a0a0a_50%,#0a0a0a_75%,#050505_75%,#050505_100%)] bg-[length:14px_14px] opacity-95 pointer-events-none" />
               </div>
             )}
           </SquareEl>

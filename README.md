@@ -13,6 +13,8 @@ A Catchphrase-style quiz web app for a quiz master (phone) plus a clean "display
 - Dual-view system:
   - Controller View (phone): Touch-optimized quiz master controls
   - Display View (big screen): Clean broadcast-quality presentation
+- Cross-device live sync:
+  - Display links include a live host id and sync over WebRTC (no database required)
 - Optional video questions:
   - YouTube embed (stable) or direct MP4 URL
 - LocalStorage persistence
