@@ -89,7 +89,7 @@ const normalizeState = (value, quizId) => {
   return { ...value, isPlaceholder: false };
 };
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   const quizId = normalizeQuizId(req.query?.quizId);
   if (!quizId) {
     res.status(400).json({ ok: false, error: 'missing_quiz_id' });
@@ -148,4 +148,4 @@ module.exports = async (req, res) => {
     presence: buildPresence(session),
     state: session.state
   });
-};
+}
