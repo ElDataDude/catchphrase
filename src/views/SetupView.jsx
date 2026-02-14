@@ -8,45 +8,80 @@ const SetupView = () => {
   const [username, setUsername] = useState('');
   const [quizName, setQuizName] = useState('');
   const [questions, setQuestions] = useState([{ type: 'image', imageUrl: '', videoUrl: '', startTime: 0 }]);
+  const [fieldErrors, setFieldErrors] = useState({ username: '', quizName: '' });
+  const [questionError, setQuestionError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const handleAddQuestion = () => {
     setQuestions([...questions, { type: 'image', imageUrl: '', videoUrl: '', startTime: 0 }]);
+    setQuestionError('');
+    setFormError('');
   };
 
   const handleRemoveQuestion = (index) => {
     setQuestions(questions.filter((_, i) => i !== index));
+    setQuestionError('');
+    setFormError('');
   };
 
   const handleQuestionChange = (index, field, value) => {
     const updated = [...questions];
     updated[index] = { ...updated[index], [field]: value };
     setQuestions(updated);
+    setQuestionError('');
+    setFormError('');
   };
 
   const handleCreateQuiz = () => {
-    if (!username.trim()) {
-      alert('Please enter a username');
+    const trimmedUsername = username.trim();
+    const trimmedQuizName = quizName.trim();
+
+    const nextFieldErrors = {
+      username: trimmedUsername ? '' : 'Username is required.',
+      quizName: trimmedQuizName ? '' : 'Quiz name is required.'
+    };
+    setFieldErrors(nextFieldErrors);
+
+    if (nextFieldErrors.username || nextFieldErrors.quizName) {
+      setFormError('Please fix the highlighted fields.');
       return;
     }
 
-    if (!quizName.trim()) {
-      alert('Please enter a quiz name');
+    const missingContentIndexes = questions
+      .map((q, index) => {
+        if (q.type === 'video') return q.videoUrl.trim() ? null : index + 1;
+        return q.imageUrl.trim() ? null : index + 1;
+      })
+      .filter((value) => value !== null);
+
+    if (missingContentIndexes.length > 0) {
+      const previewList = missingContentIndexes.slice(0, 4).join(', ');
+      const suffix = missingContentIndexes.length > 4 ? ', ...' : '';
+      setQuestionError(`Missing URL in question(s): ${previewList}${suffix}.`);
+      setFormError('Each question must include valid content before creating the quiz.');
       return;
     }
 
-    const validQuestions = questions.filter(q => {
-      if (q.type === 'video') return q.videoUrl.trim() !== '';
-      return q.imageUrl.trim() !== '';
+    const normalizedQuestions = questions.map((q) => {
+      if (q.type === 'video') {
+        return {
+          ...q,
+          videoUrl: q.videoUrl.trim(),
+          startTime: parseInt(q.startTime, 10) || 0
+        };
+      }
+      return {
+        ...q,
+        imageUrl: q.imageUrl.trim()
+      };
     });
 
-    if (validQuestions.length === 0) {
-      alert('Please add at least one question with valid content');
-      return;
-    }
+    setQuestionError('');
+    setFormError('');
 
-    const quiz = createEmptyQuiz(username.trim(), quizName.trim());
-    quiz.questions = validQuestions.map(q =>
-      createEmptyQuestion(q.imageUrl.trim(), q.type, q.videoUrl.trim(), q.startTime)
+    const quiz = createEmptyQuiz(trimmedUsername, trimmedQuizName);
+    quiz.questions = normalizedQuestions.map(q =>
+      createEmptyQuestion(q.imageUrl || '', q.type, q.videoUrl || '', q.startTime)
     );
 
     saveQuiz(quiz);
@@ -70,10 +105,17 @@ const SetupView = () => {
               id="setup-username"
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, username: '' }));
+                setFormError('');
+              }}
               placeholder="Enter your username"
               className="field"
             />
+            {fieldErrors.username && (
+              <div className="text-rose-200 text-xs mt-1">{fieldErrors.username}</div>
+            )}
           </div>
 
           <div>
@@ -82,10 +124,17 @@ const SetupView = () => {
               id="setup-quiz-name"
               type="text"
               value={quizName}
-              onChange={(e) => setQuizName(e.target.value)}
+              onChange={(e) => {
+                setQuizName(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, quizName: '' }));
+                setFormError('');
+              }}
               placeholder="e.g., Christmas Quiz 2025"
               className="field"
             />
+            {fieldErrors.quizName && (
+              <div className="text-rose-200 text-xs mt-1">{fieldErrors.quizName}</div>
+            )}
           </div>
 
           <div>
@@ -140,6 +189,7 @@ const SetupView = () => {
                           value={question.imageUrl}
                           onChange={(e) => handleQuestionChange(index, 'imageUrl', e.target.value)}
                           placeholder="Image URL"
+                          inputMode="url"
                           className="field"
                         />
                       ) : (
@@ -149,6 +199,7 @@ const SetupView = () => {
                             value={question.videoUrl}
                             onChange={(e) => handleQuestionChange(index, 'videoUrl', e.target.value)}
                             placeholder="YouTube or MP4 URL"
+                            inputMode="url"
                             className="flex-1 field"
                           />
                           <div className="w-24">
@@ -176,7 +227,17 @@ const SetupView = () => {
                 </div>
               ))}
             </div>
+
+            {questionError && (
+              <div className="text-rose-200 text-xs mt-2">{questionError}</div>
+            )}
           </div>
+
+          {formError && (
+            <div className="bg-rose-500/15 text-rose-100 text-sm px-3 py-2 rounded-lg ring-1 ring-rose-200/20">
+              {formError}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

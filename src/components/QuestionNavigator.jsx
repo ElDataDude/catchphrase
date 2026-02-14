@@ -18,6 +18,11 @@ const QuestionNavigator = () => {
     }
   };
 
+  const jumpToQuestion = (index) => {
+    if (index === currentQuestionIndex) return;
+    dispatch({ type: 'SET_CURRENT_QUESTION', payload: index });
+  };
+
   if (questions.length === 0) return null;
 
   return (
@@ -42,6 +47,32 @@ const QuestionNavigator = () => {
         >
           Next -&gt;
         </button>
+      </div>
+
+      <div className="mt-2 overflow-x-auto">
+        <div className="flex gap-1 min-w-max">
+          {questions.map((question, index) => {
+            const isCurrent = index === currentQuestionIndex;
+            const revealedCount = question.revealedSquares?.length || 0;
+            return (
+              <button
+                key={question.id || index}
+                type="button"
+                onClick={() => jumpToQuestion(index)}
+                className={[
+                  'px-2 py-1 rounded-lg text-xs font-extrabold transition-colors ring-1',
+                  isCurrent
+                    ? 'bg-cyan-200 text-black ring-white/10'
+                    : 'bg-white/10 text-white/70 hover:bg-white/15 ring-white/15'
+                ].join(' ')}
+                title={`Question ${index + 1} (${revealedCount}/9 revealed)`}
+              >
+                {index + 1}
+                <span className="ml-1 text-[10px] opacity-70">{revealedCount}/9</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

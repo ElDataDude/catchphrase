@@ -5,7 +5,7 @@ import { getUnrevealedSquares, areAllSquaresRevealed, getNextSequenceSquare } fr
 
 const ControlPanel = ({ onResetQuestion }) => {
   const { state } = useQuiz();
-  const { revealRandomSquare, revealNextInSequence } = useSquareReveal();
+  const { revealRandomSquare, revealNextInSequence, revealAllSquares, undoLastReveal, canUndo } = useSquareReveal();
 
   const currentQuestion = state.questions[state.currentQuestionIndex];
 
@@ -37,8 +37,30 @@ const ControlPanel = ({ onResetQuestion }) => {
           disabled={allRevealed || !nextInSequence}
           className="w-full btn-secondary disabled:opacity-40 disabled:cursor-not-allowed py-2 px-4 text-sm"
         >
-          Next in Sequence
+          Next in Sequence ({nextInSequence})
         </button>
+      )}
+
+      <button
+        onClick={undoLastReveal}
+        disabled={!canUndo}
+        className="w-full btn-secondary disabled:opacity-40 disabled:cursor-not-allowed py-2 px-4 text-sm"
+      >
+        Undo Last Reveal
+      </button>
+
+      <button
+        onClick={revealAllSquares}
+        disabled={allRevealed}
+        className="w-full btn-secondary disabled:opacity-40 disabled:cursor-not-allowed py-2 px-4 text-sm"
+      >
+        Reveal All
+      </button>
+
+      {hasSequence && !nextInSequence && !allRevealed && (
+        <div className="text-amber-200/90 text-[11px] text-center">
+          Sequence finished. Continue with random/manual reveals.
+        </div>
       )}
 
       <button

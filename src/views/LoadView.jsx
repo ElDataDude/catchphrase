@@ -7,13 +7,15 @@ const LoadView = () => {
   const [username, setUsername] = useState('');
   const [quizzes, setQuizzes] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSearch = () => {
     if (!username.trim()) {
-      alert('Please enter a username');
+      setError('Username is required.');
       return;
     }
 
+    setError('');
     const userQuizzes = getAllQuizzesForUser(username.trim());
     setQuizzes(userQuizzes);
     setHasSearched(true);
@@ -35,10 +37,15 @@ const LoadView = () => {
 
         <div className="surface-strong p-6 space-y-4">
           <div className="flex gap-2">
+            <label htmlFor="load-username" className="sr-only">Username</label>
             <input
+              id="load-username"
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setError('');
+              }}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="Enter username"
               className="flex-1 field"
@@ -50,6 +57,10 @@ const LoadView = () => {
               Search
             </button>
           </div>
+
+          {error && (
+            <div className="text-rose-200 text-xs mt-1">{error}</div>
+          )}
 
           {hasSearched && (
             <div className="pt-4">

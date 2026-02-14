@@ -3,6 +3,13 @@ import { saveQuiz } from '../utils/storage';
 
 const QuizContext = createContext(null);
 
+const getNextSequenceIndex = (question, revealedSquares) => {
+  if (!question.revealSequence || question.revealSequence.length === 0) return 0;
+  const nextRevealed = new Set(revealedSquares);
+  const firstMissing = question.revealSequence.findIndex((sq) => !nextRevealed.has(sq));
+  return firstMissing === -1 ? question.revealSequence.length : firstMissing;
+};
+
 const quizReducer = (state, action) => {
   switch (action.type) {
     case 'LOAD_QUIZ':
@@ -20,16 +27,64 @@ const quizReducer = (state, action) => {
         questions: state.questions.map((q, idx) =>
           idx === state.currentQuestionIndex
             ? (() => {
-                const revealedSquares = [...new Set([...q.revealedSquares, action.payload])];
-                const nextRevealed = new Set(revealedSquares);
-                const currentSequenceIndex =
-                  q.revealSequence && q.revealSequence.length > 0
-                    ? (() => {
-                        const firstMissing = q.revealSequence.findIndex((sq) => !nextRevealed.has(sq));
-                        return firstMissing === -1 ? q.revealSequence.length : firstMissing;
-                      })()
-                    : 0;
-                return { ...q, revealedSquares, currentSequenceIndex };
+                const wasAlreadyRevealed = q.revealedSquares.includes(action.payload);
+                if (wasAlreadyRevealed) return q;
+
+                const revealedSquares = [...q.revealedSquares, action.payload];
+                const revealHistory = [...(q.revealHistory || []), action.payload];
+                const currentSequenceIndex = getNextSequenceIndex(q, revealedSquares);
+
+                return { ...q, revealedSquares, revealHistory, currentSequenceIndex };
+              })()
+            : q
+        )
+      };
+
+    case 'UNDO_LAST_REVEAL':
+      return {
+        ...state,
+        questions: state.questions.map((q, idx) =>
+          idx === state.currentQuestionIndex
+            ? (() => {
+                const revealHistory = q.revealHistory || [];
+                if (revealHistory.length === 0) return q;
+
+                const lastSquare = revealHistory[revealHistory.length - 1];
+                const nextHistory = revealHistory.slice(0, -1);
+                const revealedSquares = q.revealedSquares.filter((sq) => sq !== lastSquare);
+                const currentSequenceIndex = getNextSequenceIndex(q, revealedSquares);
+
+                return {
+                  ...q,
+                  revealedSquares,
+                  revealHistory: nextHistory,
+                  currentSequenceIndex
+                };
+              })()
+            : q
+        )
+      };
+
+    case 'REVEAL_ALL_SQUARES':
+      return {
+        ...state,
+        questions: state.questions.map((q, idx) =>
+          idx === state.currentQuestionIndex
+            ? (() => {
+                const allSquares = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                const unrevealed = allSquares.filter((sq) => !q.revealedSquares.includes(sq));
+                if (unrevealed.length === 0) return q;
+
+                const revealedSquares = [...q.revealedSquares, ...unrevealed];
+                const revealHistory = [...(q.revealHistory || []), ...unrevealed];
+                const currentSequenceIndex = getNextSequenceIndex(q, revealedSquares);
+
+                return {
+                  ...q,
+                  revealedSquares,
+                  revealHistory,
+                  currentSequenceIndex
+                };
               })()
             : q
         )
@@ -65,6 +120,7 @@ const quizReducer = (state, action) => {
             ? {
                 ...q,
                 revealedSquares: [],
+                revealHistory: [],
                 currentSequenceIndex: 0,
                 timerMode: { ...q.timerMode, isRunning: false, currentSquare: 0 }
               }
@@ -79,6 +135,7 @@ const quizReducer = (state, action) => {
         questions: state.questions.map(q => ({
           ...q,
           revealedSquares: [],
+          revealHistory: [],
           currentSequenceIndex: 0,
           timerMode: { ...q.timerMode, isRunning: false, currentSquare: 0 }
         }))

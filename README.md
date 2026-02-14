@@ -10,6 +10,10 @@ A Catchphrase-style quiz web app for a quiz master (phone) plus a clean "display
   - Random: Reveal random unrevealed squares
   - Sequence: Pre-define the order of reveals
   - Timer: Auto-reveal at set intervals
+- Quiz master QoL controls:
+  - Live quick-action rail (random, undo, reset current question)
+  - Undo last reveal and reveal-all controls
+  - Direct question jump chips with per-question reveal progress
 - Dual-view system:
   - Controller View (phone): Touch-optimized quiz master controls
   - Display View (big screen): Clean broadcast-quality presentation

@@ -10,6 +10,7 @@ export const createEmptyQuestion = (imageUrl = '', type = 'image', videoUrl = ''
     videoUrl,
     startTime: parseInt(startTime, 10) || 0,
     revealedSquares: [],
+    revealHistory: [],
     revealSequence: null,
     // Deprecated: compute next in sequence from revealedSquares + revealSequence.
     currentSequenceIndex: 0,
