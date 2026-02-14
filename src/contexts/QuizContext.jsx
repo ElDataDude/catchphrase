@@ -133,6 +133,19 @@ const createHostPeerId = (quizId) => {
   return `host_${shortQuizId}_${suffix}`;
 };
 
+const PRESENCE_PING_MS = 1500;
+const PRESENCE_STALE_MS = 5000;
+const DISPLAY_CONNECT_TIMEOUT_MS = 6000;
+const WEBRTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+  ]
+};
+
 export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostPeerId = null }) => {
   const [state, dispatch] = useReducer(quizReducer, initialQuiz);
   const channelRef = useRef(null);
@@ -180,7 +193,11 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
 
   const refreshPresence = useCallback(() => {
     const counts = { controller: 0, display: 0 };
-    for (const localRole of localPeersRef.current.values()) {
+    for (const peerEntry of localPeersRef.current.values()) {
+      const localRole =
+        typeof peerEntry === 'string'
+          ? peerEntry
+          : peerEntry?.role;
       if (localRole === 'controller') counts.controller += 1;
       if (localRole === 'display') counts.display += 1;
     }
@@ -222,11 +239,16 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
     };
 
     const trackPeer = (sender, senderRole) => {
-      if (!sender || sender === clientId) return;
-      if (!senderRole) return;
+      if (!sender || sender === clientId || !senderRole) return;
+      const now = Date.now();
       const prev = localPeersRef.current.get(sender);
-      if (prev === senderRole) return;
-      localPeersRef.current.set(sender, senderRole);
+
+      if (prev && typeof prev === 'object' && prev.role === senderRole) {
+        prev.lastSeen = now;
+        return;
+      }
+
+      localPeersRef.current.set(sender, { role: senderRole, lastSeen: now });
       refreshPresence();
     };
 
@@ -237,20 +259,41 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
       refreshPresence();
     };
 
+    const sweepStalePeers = () => {
+      const now = Date.now();
+      let changed = false;
+      for (const [sender, peerEntry] of localPeersRef.current.entries()) {
+        if (sender === clientId) continue;
+        const lastSeen =
+          typeof peerEntry === 'object' && typeof peerEntry.lastSeen === 'number'
+            ? peerEntry.lastSeen
+            : 0;
+        if (now - lastSeen > PRESENCE_STALE_MS) {
+          localPeersRef.current.delete(sender);
+          changed = true;
+        }
+      }
+      if (changed) refreshPresence();
+    };
+
     channel.onmessage = (event) => {
       const msg = event.data;
       if (!msg || msg.sender === clientId) return;
       if (quizId && msg.quizId && msg.quizId !== quizId) return;
+
+      trackPeer(msg.sender, msg.senderRole);
       if (msg.to && msg.to !== clientId) return;
 
       if (msg.type === 'HELLO') {
-        trackPeer(msg.sender, msg.senderRole);
         send({ type: 'HELLO_ACK', to: msg.sender });
         return;
       }
 
       if (msg.type === 'HELLO_ACK') {
-        trackPeer(msg.sender, msg.senderRole);
+        return;
+      }
+
+      if (msg.type === 'PING') {
         return;
       }
 
@@ -277,6 +320,10 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
     // Announce + request the latest state from any existing controller tab.
     send({ type: 'HELLO' });
     send({ type: 'REQUEST_SYNC' });
+    const pingIntervalId = window.setInterval(() => {
+      send({ type: 'PING' });
+      sweepStalePeers();
+    }, PRESENCE_PING_MS);
 
     const handleBeforeUnload = () => {
       send({ type: 'GOODBYE' });
@@ -285,6 +332,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.clearInterval(pingIntervalId);
       if (channelRef.current) {
         send({ type: 'GOODBYE' });
         channelRef.current.close();
@@ -297,6 +345,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
     if (!initialQuiz?.id || typeof window === 'undefined') return;
 
     let isCancelled = false;
+    let connectToController = null;
 
     const recalcRemotePresence = () => {
       if (role === 'controller') {
@@ -318,10 +367,11 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
       }
     };
 
-    const scheduleReconnect = (connectFn) => {
+    const scheduleReconnect = () => {
+      if (!connectToController) return;
       clearReconnect();
       reconnectTimeoutRef.current = setTimeout(() => {
-        if (!isCancelled) connectFn();
+        if (!isCancelled) connectToController();
       }, 1200);
     };
 
@@ -356,10 +406,12 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
         const { default: Peer } = await import('peerjs');
         if (isCancelled) return;
 
+        const peerOptions = { config: WEBRTC_CONFIG };
+
         const peer =
           role === 'controller'
-            ? new Peer(resolvedHostPeerId)
-            : new Peer();
+            ? new Peer(resolvedHostPeerId, peerOptions)
+            : new Peer(peerOptions);
 
         peerRef.current = peer;
 
@@ -372,18 +424,23 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
 
           peer.on('connection', (conn) => {
             peerConnectionsRef.current.set(conn.peer, conn);
+            let disconnected = false;
+            const handleDisconnect = () => {
+              if (disconnected) return;
+              disconnected = true;
+              peerConnectionsRef.current.delete(conn.peer);
+              recalcRemotePresence();
+              if (peerConnectionsRef.current.size === 0) {
+                setSyncStatus('ready');
+              }
+            };
 
             attachConnectionEvents(conn, {
-              onDisconnect: () => {
-                peerConnectionsRef.current.delete(conn.peer);
-                recalcRemotePresence();
-                if (peerConnectionsRef.current.size === 0) {
-                  setSyncStatus('ready');
-                }
-              }
+              onDisconnect: handleDisconnect
             });
 
             conn.on('open', () => {
+              if (isCancelled) return;
               recalcRemotePresence();
               setSyncStatus('connected');
               const latest = stateRef.current;
@@ -399,23 +456,48 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
         } else if (resolvedHostPeerId) {
           setSyncStatus('connecting');
 
-          const connectToController = () => {
+          connectToController = () => {
             if (!peerRef.current || isCancelled) return;
-            const conn = peerRef.current.connect(resolvedHostPeerId, { reliable: true });
+            const conn = peerRef.current.connect(resolvedHostPeerId, {
+              reliable: true,
+              serialization: 'json'
+            });
             displayConnRef.current = conn;
+            let disconnected = false;
+            const handleDisconnect = () => {
+              if (disconnected) return;
+              disconnected = true;
+              if (displayConnRef.current === conn) {
+                displayConnRef.current = null;
+              }
+              recalcRemotePresence();
+              if (!isCancelled) {
+                setSyncStatus('connecting');
+                scheduleReconnect();
+              }
+            };
+
+            const timeoutId = window.setTimeout(() => {
+              if (!conn.open) {
+                try {
+                  conn.close();
+                } catch {
+                  // no-op
+                }
+                handleDisconnect();
+              }
+            }, DISPLAY_CONNECT_TIMEOUT_MS);
 
             attachConnectionEvents(conn, {
               onDisconnect: () => {
-                if (displayConnRef.current === conn) {
-                  displayConnRef.current = null;
-                }
-                recalcRemotePresence();
-                setSyncStatus('connecting');
-                scheduleReconnect(connectToController);
+                window.clearTimeout(timeoutId);
+                handleDisconnect();
               }
             });
 
             conn.on('open', () => {
+              if (isCancelled || disconnected) return;
+              window.clearTimeout(timeoutId);
               clearReconnect();
               recalcRemotePresence();
               setSyncStatus('connected');
@@ -431,10 +513,30 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
             if (isCancelled) return;
             connectToController();
           });
+        } else {
+          setSyncStatus('error');
         }
 
-        peer.on('error', () => {
+        peer.on('error', (error) => {
+          const errorType = error?.type;
+          if (errorType === 'peer-unavailable') {
+            if (role === 'display') {
+              setSyncStatus('connecting');
+              scheduleReconnect();
+            }
+            return;
+          }
           setSyncStatus('error');
+        });
+
+        peer.on('disconnected', () => {
+          if (isCancelled) return;
+          if (role === 'display') {
+            setSyncStatus('connecting');
+            scheduleReconnect();
+            return;
+          }
+          setSyncStatus('ready');
         });
       } catch {
         setSyncStatus('error');
