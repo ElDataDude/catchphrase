@@ -76,7 +76,7 @@ npm run preview
     - Clean presentation perfect for mirroring
     - Question counter
 
-> Note: Same-device tabs sync instantly with `BroadcastChannel`. Cross-device sync uses the `/api/realtime/:quizId` in-memory relay on Vercel (no DB setup). Relay sessions are ephemeral by design.
+> Note: Same-device tabs sync instantly with `BroadcastChannel`. Cross-device sync uses the `/api/realtime?quizId=...` in-memory relay on Vercel (no DB setup). Relay sessions are ephemeral by design.
 
 ### Loading a Saved Quiz
 

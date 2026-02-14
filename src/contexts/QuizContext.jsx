@@ -334,7 +334,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
     const quizId = initialQuiz?.id;
     if (!quizId || typeof window === 'undefined') return;
 
-    const relayBase = `/api/realtime/${encodeURIComponent(quizId)}`;
+    const relayBase = `/api/realtime?quizId=${encodeURIComponent(quizId)}`;
     const aborter = new AbortController();
 
     const applyRelayResponse = (payload) => {
@@ -443,7 +443,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
       });
 
       // Push latest state to relay so displays on other devices can pull updates.
-      void fetch(`/api/realtime/${encodeURIComponent(state.id)}`, {
+      void fetch(`/api/realtime?quizId=${encodeURIComponent(state.id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
