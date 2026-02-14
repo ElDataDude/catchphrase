@@ -20,7 +20,7 @@ const QuizView = () => {
     const loadedQuiz = loadQuiz(quizId);
 
     if (!loadedQuiz) {
-      if (viewMode === 'display' && hostPeerId) {
+      if (viewMode === 'display') {
         setQuiz({
           id: quizId,
           username: 'remote',

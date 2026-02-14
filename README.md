@@ -14,7 +14,8 @@ A Catchphrase-style quiz web app for a quiz master (phone) plus a clean "display
   - Controller View (phone): Touch-optimized quiz master controls
   - Display View (big screen): Clean broadcast-quality presentation
 - Cross-device live sync:
-  - Display links include a live host id and sync over WebRTC (no database required)
+  - Controller pushes state to a Vercel serverless relay (no database required)
+  - Displays can join from other devices and poll the relay for live updates
 - Optional video questions:
   - YouTube embed (stable) or direct MP4 URL
 - LocalStorage persistence
@@ -75,7 +76,7 @@ npm run preview
     - Clean presentation perfect for mirroring
     - Question counter
 
-> Note: Controller <-> Display sync uses `BroadcastChannel`, so it works between tabs/windows on the same device/browser profile (great for casting the Display tab). Cross-device control is not implemented.
+> Note: Same-device tabs sync instantly with `BroadcastChannel`. Cross-device sync uses the `/api/realtime/:quizId` in-memory relay on Vercel (no DB setup). Relay sessions are ephemeral by design.
 
 ### Loading a Saved Quiz
 

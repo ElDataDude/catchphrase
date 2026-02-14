@@ -135,28 +135,17 @@ const createHostPeerId = (quizId) => {
 
 const PRESENCE_PING_MS = 1500;
 const PRESENCE_STALE_MS = 5000;
-const DISPLAY_CONNECT_TIMEOUT_MS = 6000;
-const WEBRTC_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ]
-};
+const RELAY_HEARTBEAT_MS = 2000;
+const RELAY_POLL_MS = 800;
 
 export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostPeerId = null }) => {
   const [state, dispatch] = useReducer(quizReducer, initialQuiz);
   const channelRef = useRef(null);
-  const peerRef = useRef(null);
-  const peerConnectionsRef = useRef(new Map());
-  const displayConnRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
   const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
   const localPeersRef = useRef(new Map());
   const remotePresenceRef = useRef({ controller: 0, display: 0 });
+  const relayVersionRef = useRef(0);
   const [presence, setPresence] = useState({ controller: 0, display: 0 });
   const [syncStatus, setSyncStatus] = useState('local');
 
@@ -340,239 +329,100 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
     };
   }, [applySyncedState, channelName, clientId, initialQuiz?.id, refreshPresence, role]); // Only re-init if quiz/role changes
 
-  // WebRTC sync for cross-device control/display.
+  // Server relay sync (cross-device, no DB required).
   useEffect(() => {
-    if (!initialQuiz?.id || typeof window === 'undefined') return;
+    const quizId = initialQuiz?.id;
+    if (!quizId || typeof window === 'undefined') return;
 
-    let isCancelled = false;
-    let connectToController = null;
+    const relayBase = `/api/realtime/${encodeURIComponent(quizId)}`;
+    const aborter = new AbortController();
 
-    const recalcRemotePresence = () => {
-      if (role === 'controller') {
-        let openDisplays = 0;
-        for (const conn of peerConnectionsRef.current.values()) {
-          if (conn?.open) openDisplays += 1;
+    const applyRelayResponse = (payload) => {
+      if (!payload || typeof payload !== 'object') return;
+
+      if (typeof payload.version === 'number') {
+        relayVersionRef.current = Math.max(relayVersionRef.current, payload.version);
+      }
+
+      const presencePayload = payload.presence;
+      if (presencePayload && typeof presencePayload === 'object') {
+        remotePresenceRef.current = {
+          controller: Number(presencePayload.controller || 0),
+          display: Number(presencePayload.display || 0)
+        };
+        refreshPresence();
+      }
+
+      if (payload.state?.id === quizId) {
+        applySyncedState(payload.state);
+        if (role === 'display') {
+          setSyncStatus('connected');
         }
-        remotePresenceRef.current.display = openDisplays;
-      } else {
-        remotePresenceRef.current.controller = displayConnRef.current?.open ? 1 : 0;
-      }
-      refreshPresence();
-    };
-
-    const clearReconnect = () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
+      } else if (role === 'display') {
+        setSyncStatus('connecting');
       }
     };
 
-    const scheduleReconnect = () => {
-      if (!connectToController) return;
-      clearReconnect();
-      reconnectTimeoutRef.current = setTimeout(() => {
-        if (!isCancelled) connectToController();
-      }, 1200);
-    };
-
-    const handleIncomingMessage = (message, conn) => {
-      if (!message || typeof message !== 'object') return;
-
-      if (message.type === 'REQUEST_SYNC' && role === 'controller') {
-        const latest = stateRef.current;
-        if (latest && conn?.open) {
-          try {
-            conn.send({ type: 'SYNC_STATE_UPDATE', payload: latest });
-          } catch {
-            // no-op
-          }
-        }
-        return;
-      }
-
-      if (message.type === 'SYNC_STATE_UPDATE') {
-        applySyncedState(message.payload);
-      }
-    };
-
-    const attachConnectionEvents = (conn, { onDisconnect }) => {
-      conn.on('data', (message) => handleIncomingMessage(message, conn));
-      conn.on('error', () => onDisconnect());
-      conn.on('close', () => onDisconnect());
-    };
-
-    const setupPeer = async () => {
+    const relayPost = async (kind, payload = null) => {
       try {
-        const { default: Peer } = await import('peerjs');
-        if (isCancelled) return;
-
-        const peerOptions = { config: WEBRTC_CONFIG };
-
-        const peer =
-          role === 'controller'
-            ? new Peer(resolvedHostPeerId, peerOptions)
-            : new Peer(peerOptions);
-
-        peerRef.current = peer;
-
-        if (role === 'controller') {
-          setSyncStatus('connecting');
-          peer.on('open', () => {
-            if (isCancelled) return;
-            setSyncStatus('ready');
-          });
-
-          peer.on('connection', (conn) => {
-            peerConnectionsRef.current.set(conn.peer, conn);
-            let disconnected = false;
-            const handleDisconnect = () => {
-              if (disconnected) return;
-              disconnected = true;
-              peerConnectionsRef.current.delete(conn.peer);
-              recalcRemotePresence();
-              if (peerConnectionsRef.current.size === 0) {
-                setSyncStatus('ready');
-              }
-            };
-
-            attachConnectionEvents(conn, {
-              onDisconnect: handleDisconnect
-            });
-
-            conn.on('open', () => {
-              if (isCancelled) return;
-              recalcRemotePresence();
-              setSyncStatus('connected');
-              const latest = stateRef.current;
-              if (latest) {
-                try {
-                  conn.send({ type: 'SYNC_STATE_UPDATE', payload: latest });
-                } catch {
-                  // no-op
-                }
-              }
-            });
-          });
-        } else if (resolvedHostPeerId) {
-          setSyncStatus('connecting');
-
-          connectToController = () => {
-            if (!peerRef.current || isCancelled) return;
-            const conn = peerRef.current.connect(resolvedHostPeerId, {
-              reliable: true,
-              serialization: 'json'
-            });
-            displayConnRef.current = conn;
-            let disconnected = false;
-            const handleDisconnect = () => {
-              if (disconnected) return;
-              disconnected = true;
-              if (displayConnRef.current === conn) {
-                displayConnRef.current = null;
-              }
-              recalcRemotePresence();
-              if (!isCancelled) {
-                setSyncStatus('connecting');
-                scheduleReconnect();
-              }
-            };
-
-            const timeoutId = window.setTimeout(() => {
-              if (!conn.open) {
-                try {
-                  conn.close();
-                } catch {
-                  // no-op
-                }
-                handleDisconnect();
-              }
-            }, DISPLAY_CONNECT_TIMEOUT_MS);
-
-            attachConnectionEvents(conn, {
-              onDisconnect: () => {
-                window.clearTimeout(timeoutId);
-                handleDisconnect();
-              }
-            });
-
-            conn.on('open', () => {
-              if (isCancelled || disconnected) return;
-              window.clearTimeout(timeoutId);
-              clearReconnect();
-              recalcRemotePresence();
-              setSyncStatus('connected');
-              try {
-                conn.send({ type: 'REQUEST_SYNC' });
-              } catch {
-                // no-op
-              }
-            });
-          };
-
-          peer.on('open', () => {
-            if (isCancelled) return;
-            connectToController();
-          });
-        } else {
-          setSyncStatus('error');
-        }
-
-        peer.on('error', (error) => {
-          const errorType = error?.type;
-          if (errorType === 'peer-unavailable') {
-            if (role === 'display') {
-              setSyncStatus('connecting');
-              scheduleReconnect();
-            }
-            return;
-          }
-          setSyncStatus('error');
+        const response = await fetch(relayBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: aborter.signal,
+          body: JSON.stringify({
+            kind,
+            role,
+            clientId,
+            state: payload
+          })
         });
-
-        peer.on('disconnected', () => {
-          if (isCancelled) return;
-          if (role === 'display') {
-            setSyncStatus('connecting');
-            scheduleReconnect();
-            return;
-          }
-          setSyncStatus('ready');
-        });
+        if (!response.ok) throw new Error('relay_post_failed');
+        const data = await response.json();
+        applyRelayResponse(data);
       } catch {
-        setSyncStatus('error');
+        if (aborter.signal.aborted) return;
+        if (role === 'display') setSyncStatus('error');
       }
     };
 
-    setupPeer();
+    const relayPull = async () => {
+      try {
+        const response = await fetch(relayBase, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: aborter.signal
+        });
+        if (!response.ok) throw new Error('relay_pull_failed');
+        const data = await response.json();
+        applyRelayResponse(data);
+      } catch {
+        if (aborter.signal.aborted) return;
+        if (role === 'display') setSyncStatus('error');
+      }
+    };
+
+    const heartbeatId = window.setInterval(() => {
+      void relayPost('heartbeat');
+    }, RELAY_HEARTBEAT_MS);
+
+    let pollId = null;
+    if (role === 'display') {
+      setSyncStatus('connecting');
+      void relayPull();
+      pollId = window.setInterval(() => {
+        void relayPull();
+      }, RELAY_POLL_MS);
+    } else {
+      setSyncStatus('ready');
+    }
 
     return () => {
-      isCancelled = true;
-      clearReconnect();
-      if (displayConnRef.current) {
-        displayConnRef.current.close();
-        displayConnRef.current = null;
-      }
-      for (const conn of peerConnectionsRef.current.values()) {
-        try {
-          conn.close();
-        } catch {
-          // no-op
-        }
-      }
-      peerConnectionsRef.current.clear();
-      if (peerRef.current) {
-        try {
-          peerRef.current.destroy();
-        } catch {
-          // no-op
-        }
-        peerRef.current = null;
-      }
-      remotePresenceRef.current = { controller: 0, display: 0 };
-      refreshPresence();
+      aborter.abort();
+      window.clearInterval(heartbeatId);
+      if (pollId) window.clearInterval(pollId);
       setSyncStatus('local');
     };
-  }, [applySyncedState, initialQuiz?.id, refreshPresence, resolvedHostPeerId, role]);
+  }, [applySyncedState, clientId, initialQuiz?.id, refreshPresence, role]);
 
   // Auto-save to LocalStorage on state changes (debounced)
   // AND broadcast changes to other tabs
@@ -592,14 +442,32 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
         payload: state
       });
 
-      for (const conn of peerConnectionsRef.current.values()) {
-        if (!conn?.open) continue;
-        try {
-          conn.send({ type: 'SYNC_STATE_UPDATE', payload: state });
-        } catch {
-          // no-op
-        }
-      }
+      // Push latest state to relay so displays on other devices can pull updates.
+      void fetch(`/api/realtime/${encodeURIComponent(state.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'state',
+          role,
+          clientId,
+          state
+        })
+      })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+          if (!payload || typeof payload.version !== 'number') return;
+          relayVersionRef.current = Math.max(relayVersionRef.current, payload.version);
+          if (payload.presence && typeof payload.presence === 'object') {
+            remotePresenceRef.current = {
+              controller: Number(payload.presence.controller || 0),
+              display: Number(payload.presence.display || 0)
+            };
+            refreshPresence();
+          }
+        })
+        .catch(() => {
+          // no-op: local dev may not expose /api without `vercel dev`
+        });
     }
 
     // Reset remote update flag for next cycle
@@ -610,7 +478,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [state, clientId, role]);
+  }, [state, clientId, refreshPresence, role]);
 
   return (
     <QuizContext.Provider
