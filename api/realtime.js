@@ -20,6 +20,7 @@ const getSession = (store, quizId) => {
     quizId,
     state: null,
     version: 0,
+    syncVersion: -1,
     updatedAt: 0,
     lastSeenAt: now,
     clients: new Map()
@@ -128,12 +129,16 @@ export default async function handler(req, res) {
     session.clients.set(clientId, { role, lastSeenAt: now });
   }
 
-  if (body.kind === 'state' && role === 'controller') {
+  const type = body.type || body.kind;
+
+  if (type === 'STATE_UPDATE' && role === 'controller') {
     const nextState = normalizeState(body.state, quizId);
-    if (nextState) {
+    const nextSyncVersion = Number(nextState?.liveState?.syncVersion ?? body.syncVersion ?? -1);
+    if (nextState && nextSyncVersion > session.syncVersion) {
       session.state = nextState;
       session.updatedAt = now;
       session.version += 1;
+      session.syncVersion = nextSyncVersion;
     }
   }
 

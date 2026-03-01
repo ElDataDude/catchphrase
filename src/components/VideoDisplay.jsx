@@ -1,38 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-
-const parseYouTubeId = (input) => {
-  if (!input) return null;
-
-  let url;
-  try {
-    url = new URL(input);
-  } catch {
-    return null;
-  }
-
-  const host = url.hostname.replace(/^www\./, '');
-
-  if (host === 'youtu.be') {
-    const id = url.pathname.slice(1).split('/')[0];
-    return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
-  }
-
-  if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
-    if (url.pathname === '/watch') {
-      const id = url.searchParams.get('v');
-      return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
-    }
-
-    const parts = url.pathname.split('/').filter(Boolean);
-    const head = parts[0];
-    const id = parts[1];
-    if ((head === 'embed' || head === 'shorts' || head === 'live' || head === 'v') && id) {
-      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
-    }
-  }
-
-  return null;
-};
+import { parseYouTubeId } from '../lib/mediaPreflight';
 
 const clampInt = (value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
   const n = Number.parseInt(value, 10);
@@ -40,7 +7,7 @@ const clampInt = (value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
   return Math.min(max, Math.max(min, n));
 };
 
-const VideoDisplay = ({ url, startTime = 0, duration = 10 }) => {
+const VideoDisplay = ({ url, startTime = 0, duration = 10, fitMode = 'contain' }) => {
   const ytId = useMemo(() => parseYouTubeId(url), [url]);
   const videoRef = useRef(null);
 
@@ -146,7 +113,7 @@ const VideoDisplay = ({ url, startTime = 0, duration = 10 }) => {
         <video
           ref={videoRef}
           src={url}
-          className="w-full h-full object-contain"
+          className={`w-full h-full ${fitMode === 'cover' ? 'object-cover' : 'object-contain'}`}
           controls={false}
           playsInline
           muted
@@ -177,4 +144,3 @@ const VideoDisplay = ({ url, startTime = 0, duration = 10 }) => {
 };
 
 export default VideoDisplay;
-

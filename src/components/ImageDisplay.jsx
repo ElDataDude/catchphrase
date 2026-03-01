@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-const ImageDisplay = ({ imageUrl }) => {
+const ImageDisplay = ({ imageUrl, alt = 'Quiz media', fitMode = 'cover' }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -45,8 +45,8 @@ const ImageDisplay = ({ imageUrl }) => {
       {imageUrl && (
         <img
           src={imageUrl}
-          alt="Quiz question"
-          className="w-full h-full object-cover"
+          alt={alt}
+          className={`w-full h-full ${fitMode === 'contain' ? 'object-contain' : 'object-cover'}`}
           onLoad={handleLoad}
           onError={handleError}
           style={{ display: hasError ? 'none' : 'block' }}

@@ -1,16 +1,10 @@
 import React from 'react';
-import { useQuiz } from '../contexts/QuizContext';
-import { useSquareReveal } from '../hooks/useSquareReveal';
-import { GRID_SQUARES } from '../utils/quizHelpers';
+import { GRID_SQUARES } from '../lib/quizSchema';
 
-const ManualRevealPad = () => {
-  const { state } = useQuiz();
-  const { revealSquare } = useSquareReveal();
+const ManualRevealPad = ({ question, onReveal }) => {
+  if (!question) return null;
 
-  const currentQuestion = state.questions[state.currentQuestionIndex];
-  if (!currentQuestion) return null;
-
-  const revealSequence = currentQuestion.revealSequence || [];
+  const revealSequence = question.reveal.sequence || [];
   const getSequenceOrder = (squareNumber) => {
     const idx = revealSequence.indexOf(squareNumber);
     return idx >= 0 ? idx + 1 : null;
@@ -25,15 +19,16 @@ const ManualRevealPad = () => {
 
       <div className="grid grid-cols-3 gap-2 bg-black/40 p-2 rounded-xl ring-1 ring-white/10">
         {GRID_SQUARES.map((squareNumber) => {
-          const isRevealed = currentQuestion.revealedSquares.includes(squareNumber);
+          const isRevealed = question.reveal.revealedSquares.includes(squareNumber);
           const order = getSequenceOrder(squareNumber);
 
           return (
             <button
               key={squareNumber}
               type="button"
-              onClick={() => revealSquare(squareNumber)}
+              onClick={() => onReveal(squareNumber)}
               disabled={isRevealed}
+              aria-label={`Reveal square ${squareNumber}`}
               className={[
                 'relative aspect-square rounded font-extrabold transition-all select-none',
                 'text-xl',
