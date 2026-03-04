@@ -1,20 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useQuiz } from '../contexts/QuizContext';
-import { useSquareReveal } from '../hooks/useSquareReveal';
 
-const SequenceBuilder = () => {
-  const { state } = useQuiz();
-  const { setRevealSequence } = useSquareReveal();
-
-  const currentQuestion = state.questions[state.currentQuestionIndex];
-  const [sequence, setSequence] = useState(currentQuestion?.revealSequence || []);
+const SequenceBuilder = ({ question, onSaveSequence }) => {
+  const [sequence, setSequence] = useState(question?.reveal?.sequence || []);
   const [isBuilding, setIsBuilding] = useState(false);
 
   useEffect(() => {
-    setSequence(currentQuestion?.revealSequence || []);
-  }, [currentQuestion?.revealSequence]);
+    setSequence(question?.reveal?.sequence || []);
+  }, [question?.reveal?.sequence]);
 
-  if (!currentQuestion) return null;
+  if (!question) return null;
 
   const handleSquareClick = (squareNumber) => {
     if (sequence.includes(squareNumber)) {
@@ -25,7 +19,7 @@ const SequenceBuilder = () => {
   };
 
   const handleSave = () => {
-    setRevealSequence(sequence.length === 9 ? sequence : null);
+    onSaveSequence(sequence.length > 0 ? sequence : null);
     setIsBuilding(false);
   };
 
@@ -34,7 +28,7 @@ const SequenceBuilder = () => {
   };
 
   const handleCancel = () => {
-    setSequence(currentQuestion?.revealSequence || []);
+    setSequence(question?.reveal?.sequence || []);
     setIsBuilding(false);
   };
 
@@ -49,7 +43,7 @@ const SequenceBuilder = () => {
     <div className="surface p-3 space-y-2">
       <div className="flex justify-between items-center">
         <h3 className="text-white font-bold text-sm">Sequence</h3>
-        {!isBuilding && currentQuestion.revealSequence && (
+        {!isBuilding && question.reveal.sequence && (
           <span className="text-cyan-200 text-xs font-bold">Set</span>
         )}
       </div>
@@ -59,12 +53,12 @@ const SequenceBuilder = () => {
           onClick={() => setIsBuilding(true)}
           className="w-full btn-secondary py-2 px-4 text-sm"
         >
-          {currentQuestion.revealSequence ? 'Edit' : 'Build Sequence'}
+          {question.reveal.sequence ? 'Edit' : 'Build Sequence'}
         </button>
       ) : (
         <div className="space-y-2">
           <div className="text-white/80 text-xs text-center">
-            Click in order (1-9):
+            Click in reveal order. Partial sequences are allowed:
           </div>
 
           <div className="grid grid-cols-3 gap-2 bg-black/40 p-2 rounded-xl ring-1 ring-white/10">
@@ -92,7 +86,7 @@ const SequenceBuilder = () => {
           </div>
 
           <div className="text-white/60 text-center text-xs">
-            {sequence.length} / 9 selected
+            {sequence.length} square{sequence.length === 1 ? '' : 's'} in sequence
           </div>
 
           <div className="flex gap-1">
@@ -112,8 +106,7 @@ const SequenceBuilder = () => {
 
           <button
             onClick={handleSave}
-            disabled={sequence.length !== 9}
-            className="w-full btn-primary disabled:opacity-40 disabled:cursor-not-allowed py-2 px-4 text-sm"
+            className="w-full btn-primary py-2 px-4 text-sm"
           >
             Save
           </button>

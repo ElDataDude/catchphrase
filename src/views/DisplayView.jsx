@@ -1,67 +1,78 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import LiveSceneStage from '../components/LiveSceneStage';
+import StatusBadge from '../components/StatusBadge';
 import { useQuiz } from '../contexts/QuizContext';
-import ImageDisplay from '../components/ImageDisplay';
-import VideoDisplay from '../components/VideoDisplay';
-import GridOverlay from '../components/GridOverlay';
+import { preloadQuestionMedia } from '../lib/mediaPreflight';
+import { buildQuestionLabel } from '../lib/quizSchema';
 
 const DisplayView = () => {
-  const { state, presence } = useQuiz();
+  const { state, presence, syncStatus } = useQuiz();
+  const currentIndex = state.liveState.currentQuestionIndex;
+  const currentQuestion = state.questions[currentIndex];
+  const nextQuestion = state.questions[currentIndex + 1];
 
-  if (state.isPlaceholder) {
+  useEffect(() => {
+    if (currentQuestion) {
+      void preloadQuestionMedia(currentQuestion);
+    }
+    if (nextQuestion) {
+      void preloadQuestionMedia(nextQuestion);
+    }
+  }, [currentQuestion, nextQuestion]);
+
+  if (state.isPlaceholder && !currentQuestion) {
     return (
-      <div className="h-screen w-screen bg-black overflow-hidden relative">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-500/15 via-black to-black" />
-        <div className="relative h-full w-full flex items-center justify-center p-4">
-          <div className="surface-strong p-6 text-center max-w-md w-full">
-            <h2 className="text-white text-2xl font-black mb-2">Waiting for controller...</h2>
-            <p className="text-white/70 text-sm">
-              Keep this display open. It will sync automatically when the quiz master connects.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const currentQuestion = state.questions[state.currentQuestionIndex];
-
-  if (!currentQuestion) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="surface-strong p-6 text-center">
-          <div className="text-white text-2xl font-black">No questions available</div>
+      <div className="display-shell">
+        <div className="surface-strong p-8 max-w-md w-full text-center">
+          <h2 className="text-white font-black text-3xl mb-3">Waiting for controller…</h2>
+          <p className="text-white/65">
+            Keep this display open. It will attach to the controller automatically when a live snapshot arrives.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen bg-black overflow-hidden landscape:block relative">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-500/15 via-black to-black" />
-
-      <div className="relative w-full h-full flex items-center justify-center p-8">
-        <div className="relative w-[calc(100vw-4rem)] h-[calc(100vh-4rem)] shadow-2xl rounded-xl overflow-hidden ring-1 ring-white/10">
-          {currentQuestion.type === 'video' ? (
-            <VideoDisplay
-              url={currentQuestion.videoUrl}
-              startTime={currentQuestion.startTime}
-            />
-          ) : (
-            <ImageDisplay imageUrl={currentQuestion.imageUrl} />
-          )}
-          <GridOverlay showNumbers={false} />
-        </div>
-
-        <div className="absolute top-6 right-8 bg-black/60 backdrop-blur-md text-white/80 px-6 py-3 rounded-full text-sm font-medium tracking-wide border border-white/10 uppercase">
-          Question {state.currentQuestionIndex + 1} <span className="text-white/40 mx-2">|</span> {state.questions.length}
-        </div>
-
-        {presence?.controller === 0 && (
-          <div className="absolute bottom-6 left-8 bg-black/50 backdrop-blur-md text-white/70 px-4 py-2 rounded-full text-xs font-medium tracking-wide border border-white/10 uppercase">
-            Waiting for controller...
-          </div>
-        )}
+    <div className="display-shell">
+      <div className="display-stage">
+        <LiveSceneStage
+          quiz={state}
+          question={currentQuestion}
+          scene={state.liveState.scene}
+          questionIndex={currentIndex}
+          displayMode
+        />
       </div>
+
+      <div className="display-topbar">
+        <div>
+          <div className="text-white/55 text-xs uppercase tracking-[0.3em]">{state.name}</div>
+          <div className="text-white font-bold text-lg">{buildQuestionLabel(currentQuestion, currentIndex)}</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <StatusBadge status={syncStatus} />
+          <div className="text-white/65 text-sm">
+            Q
+            {' '}
+            {currentIndex + 1}
+            {' '}
+            /
+            {' '}
+            {state.questions.length}
+          </div>
+        </div>
+      </div>
+
+      {(presence.controller === 0 || syncStatus === 'stale' || syncStatus === 'error') && (
+        <div className="display-status-banner">
+          {syncStatus === 'stale'
+            ? 'Signal stale. Holding the last good frame.'
+            : syncStatus === 'error'
+              ? 'Display relay offline. Keep this screen open and cast locally if needed.'
+              : 'Waiting for controller heartbeat…'}
+        </div>
+      )}
     </div>
   );
 };

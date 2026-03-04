@@ -1,74 +1,55 @@
 import React from 'react';
-import { useQuiz } from '../contexts/QuizContext';
+import { buildQuestionLabel } from '../lib/quizSchema';
+import StatusBadge from './StatusBadge';
 
-const QuestionNavigator = () => {
-  const { state, dispatch } = useQuiz();
-
-  const { questions, currentQuestionIndex } = state;
-
-  const goToPrevious = () => {
-    if (currentQuestionIndex > 0) {
-      dispatch({ type: 'SET_CURRENT_QUESTION', payload: currentQuestionIndex - 1 });
-    }
-  };
-
-  const goToNext = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      dispatch({ type: 'SET_CURRENT_QUESTION', payload: currentQuestionIndex + 1 });
-    }
-  };
-
-  const jumpToQuestion = (index) => {
-    if (index === currentQuestionIndex) return;
-    dispatch({ type: 'SET_CURRENT_QUESTION', payload: index });
-  };
-
-  if (questions.length === 0) return null;
+const QuestionNavigator = ({ questions, currentQuestionIndex, onPrevious, onNext, onJump }) => {
+  if (!questions.length) return null;
 
   return (
-    <div className="surface p-3">
-      <div className="text-white text-center font-bold text-xs mb-2">
-        Q {currentQuestionIndex + 1} / {questions.length}
+    <div className="surface p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-white font-black text-sm">
+          Q
+          {' '}
+          {currentQuestionIndex + 1}
+          {' '}
+          /
+          {' '}
+          {questions.length}
+        </div>
+        <div className="text-white/60 text-xs uppercase tracking-[0.2em]">
+          Quick jump
+        </div>
       </div>
 
       <div className="flex gap-2">
-        <button
-          onClick={goToPrevious}
-          disabled={currentQuestionIndex === 0}
-          className="flex-1 btn-secondary disabled:opacity-40 disabled:cursor-not-allowed py-2 px-4 text-sm"
-        >
-          &lt;- Prev
+        <button onClick={onPrevious} disabled={currentQuestionIndex === 0} className="flex-1 btn-secondary py-2 px-4 text-sm disabled:opacity-40">
+          &larr; Prev
         </button>
-
-        <button
-          onClick={goToNext}
-          disabled={currentQuestionIndex === questions.length - 1}
-          className="flex-1 btn-secondary disabled:opacity-40 disabled:cursor-not-allowed py-2 px-4 text-sm"
-        >
-          Next -&gt;
+        <button onClick={onNext} disabled={currentQuestionIndex === questions.length - 1} className="flex-1 btn-secondary py-2 px-4 text-sm disabled:opacity-40">
+          Next &rarr;
         </button>
       </div>
 
-      <div className="mt-2 overflow-x-auto">
-        <div className="flex gap-1 min-w-max">
+      <div className="overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
           {questions.map((question, index) => {
             const isCurrent = index === currentQuestionIndex;
-            const revealedCount = question.revealedSquares?.length || 0;
             return (
               <button
-                key={question.id || index}
+                key={question.id}
                 type="button"
-                onClick={() => jumpToQuestion(index)}
-                className={[
-                  'px-2 py-1 rounded-lg text-xs font-extrabold transition-colors ring-1',
-                  isCurrent
-                    ? 'bg-cyan-200 text-black ring-white/10'
-                    : 'bg-white/10 text-white/70 hover:bg-white/15 ring-white/15'
-                ].join(' ')}
-                title={`Question ${index + 1} (${revealedCount}/9 revealed)`}
+                onClick={() => onJump(index)}
+                className={`rounded-2xl px-3 py-2 text-left min-w-[160px] transition ${isCurrent ? 'bg-cyan-300 text-slate-950' : 'bg-white/8 text-white hover:bg-white/14'}`}
               >
-                {index + 1}
-                <span className="ml-1 text-[10px] opacity-70">{revealedCount}/9</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs opacity-70">Question {index + 1}</div>
+                    <div className="font-bold text-sm">{buildQuestionLabel(question, index)}</div>
+                  </div>
+                  <StatusBadge status={question.assetStatus.state} />
+                </div>
+                <div className="text-xs opacity-70 mt-1">{question.reveal.revealedSquares.length}/9 revealed</div>
               </button>
             );
           })}

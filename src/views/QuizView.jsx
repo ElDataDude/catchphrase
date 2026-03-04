@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { QuizProvider } from '../contexts/QuizContext';
-import { loadQuiz } from '../utils/storage';
-import { createEmptyQuestion } from '../utils/quizHelpers';
+import { createQuestion, createQuiz } from '../lib/quizSchema';
+import { getDisplaySnapshot, getQuiz, saveQuiz } from '../lib/quizStore';
 import ControllerView from './ControllerView';
 import DisplayView from './DisplayView';
 
@@ -17,31 +17,47 @@ const QuizView = () => {
   const hostPeerId = searchParams.get('host');
 
   useEffect(() => {
-    const loadedQuiz = loadQuiz(quizId);
+    const load = async () => {
+      const loadedQuiz = await getQuiz(quizId);
 
-    if (!loadedQuiz) {
-      if (viewMode === 'display') {
-        setQuiz({
-          id: quizId,
-          username: 'remote',
-          name: 'Connecting...',
-          createdAt: new Date().toISOString(),
-          questions: [createEmptyQuestion('')],
-          currentQuestionIndex: 0,
-          viewMode: 'display',
-          isPlaceholder: true
-        });
+      if (!loadedQuiz) {
+        if (viewMode === 'display') {
+          const cached = getDisplaySnapshot(quizId);
+          setQuiz(
+            cached || {
+              ...createQuiz({
+                id: quizId,
+                username: 'remote',
+                name: 'Connecting...',
+                questions: [createQuestion()],
+                liveState: {
+                  scene: 'question'
+                }
+              }),
+              isPlaceholder: true
+            }
+          );
+          setIsLoading(false);
+          return;
+        }
+        setQuiz(null);
         setIsLoading(false);
         return;
       }
-      setQuiz(null);
-      setIsLoading(false);
-      return;
-    }
 
-    setQuiz(loadedQuiz);
-    setIsLoading(false);
-  }, [quizId, viewMode, hostPeerId, navigate]);
+      if (viewMode !== 'display') {
+        void saveQuiz({
+          ...loadedQuiz,
+          lastOpenedAt: new Date().toISOString()
+        });
+      }
+
+      setQuiz(loadedQuiz);
+      setIsLoading(false);
+    };
+
+    void load();
+  }, [hostPeerId, navigate, quizId, viewMode]);
 
   if (isLoading) {
     return (

@@ -1,0 +1,17 @@
+{
+  "name": "Catchphrase v2",
+  "short_name": "Catchphrase",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#0d1829",
+  "description": "Browser-first quiz control and display app for Catchphrase-style reveals.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

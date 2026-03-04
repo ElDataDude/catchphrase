@@ -1,550 +1,413 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { saveQuiz } from '../utils/storage';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState
+} from 'react';
+import { quizReducer } from '../lib/quizReducer';
+import { areAllSquaresRevealed, ensureQuizV2 } from '../lib/quizSchema';
+import {
+  getDisplaySnapshot,
+  rememberLastQuizId,
+  saveDisplaySnapshot,
+  saveQuiz
+} from '../lib/quizStore';
+import {
+  DISPLAY_STALE_MS,
+  PRESENCE_PING_MS,
+  PRESENCE_STALE_MS,
+  RELAY_HEARTBEAT_MS,
+  RELAY_POLL_MS,
+  buildRelayUrl,
+  createClientId,
+  createEnvelope,
+  createHostPeerId
+} from '../lib/syncClient';
 
 const QuizContext = createContext(null);
 
-const getNextSequenceIndex = (question, revealedSquares) => {
-  if (!question.revealSequence || question.revealSequence.length === 0) return 0;
-  const nextRevealed = new Set(revealedSquares);
-  const firstMissing = question.revealSequence.findIndex((sq) => !nextRevealed.has(sq));
-  return firstMissing === -1 ? question.revealSequence.length : firstMissing;
-};
-
-const quizReducer = (state, action) => {
-  switch (action.type) {
-    case 'LOAD_QUIZ':
-      return action.payload;
-
-    case 'SET_VIEW_MODE':
-      return { ...state, viewMode: action.payload };
-
-    case 'SET_CURRENT_QUESTION':
-      return { ...state, currentQuestionIndex: action.payload };
-
-    case 'REVEAL_SQUARE':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === state.currentQuestionIndex
-            ? (() => {
-                const wasAlreadyRevealed = q.revealedSquares.includes(action.payload);
-                if (wasAlreadyRevealed) return q;
-
-                const revealedSquares = [...q.revealedSquares, action.payload];
-                const revealHistory = [...(q.revealHistory || []), action.payload];
-                const currentSequenceIndex = getNextSequenceIndex(q, revealedSquares);
-
-                return { ...q, revealedSquares, revealHistory, currentSequenceIndex };
-              })()
-            : q
-        )
-      };
-
-    case 'UNDO_LAST_REVEAL':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === state.currentQuestionIndex
-            ? (() => {
-                const revealHistory = q.revealHistory || [];
-                if (revealHistory.length === 0) return q;
-
-                const lastSquare = revealHistory[revealHistory.length - 1];
-                const nextHistory = revealHistory.slice(0, -1);
-                const revealedSquares = q.revealedSquares.filter((sq) => sq !== lastSquare);
-                const currentSequenceIndex = getNextSequenceIndex(q, revealedSquares);
-
-                return {
-                  ...q,
-                  revealedSquares,
-                  revealHistory: nextHistory,
-                  currentSequenceIndex
-                };
-              })()
-            : q
-        )
-      };
-
-    case 'REVEAL_ALL_SQUARES':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === state.currentQuestionIndex
-            ? (() => {
-                const allSquares = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-                const unrevealed = allSquares.filter((sq) => !q.revealedSquares.includes(sq));
-                if (unrevealed.length === 0) return q;
-
-                const revealedSquares = [...q.revealedSquares, ...unrevealed];
-                const revealHistory = [...(q.revealHistory || []), ...unrevealed];
-                const currentSequenceIndex = getNextSequenceIndex(q, revealedSquares);
-
-                return {
-                  ...q,
-                  revealedSquares,
-                  revealHistory,
-                  currentSequenceIndex
-                };
-              })()
-            : q
-        )
-      };
-
-    case 'SET_REVEAL_SEQUENCE':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === state.currentQuestionIndex
-            ? (() => {
-                const revealSequence = action.payload;
-                if (!revealSequence || revealSequence.length === 0) {
-                  return { ...q, revealSequence: null, currentSequenceIndex: 0 };
-                }
-                const revealed = new Set(q.revealedSquares);
-                const firstMissing = revealSequence.findIndex((sq) => !revealed.has(sq));
-                return {
-                  ...q,
-                  revealSequence,
-                  currentSequenceIndex: firstMissing === -1 ? revealSequence.length : firstMissing
-                };
-              })()
-            : q
-        )
-      };
-
-    case 'RESET_CURRENT_QUESTION':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === state.currentQuestionIndex
-            ? {
-                ...q,
-                revealedSquares: [],
-                revealHistory: [],
-                currentSequenceIndex: 0,
-                timerMode: { ...q.timerMode, isRunning: false, currentSquare: 0 }
-              }
-            : q
-        )
-      };
-
-    case 'RESET_ALL_QUESTIONS':
-      return {
-        ...state,
-        currentQuestionIndex: 0,
-        questions: state.questions.map(q => ({
-          ...q,
-          revealedSquares: [],
-          revealHistory: [],
-          currentSequenceIndex: 0,
-          timerMode: { ...q.timerMode, isRunning: false, currentSquare: 0 }
-        }))
-      };
-
-    case 'UPDATE_TIMER_MODE':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === state.currentQuestionIndex
-            ? { ...q, timerMode: { ...q.timerMode, ...action.payload } }
-            : q
-        )
-      };
-
-    case 'ADD_QUESTION':
-      return {
-        ...state,
-        questions: [...state.questions, action.payload]
-      };
-
-    case 'UPDATE_QUESTION':
-      return {
-        ...state,
-        questions: state.questions.map((q, idx) =>
-          idx === action.payload.index
-            ? { ...q, ...action.payload.data }
-            : q
-        )
-      };
-
-    case 'REMOVE_QUESTION':
-      return {
-        ...state,
-        questions: state.questions.filter((_, idx) => idx !== action.payload),
-        currentQuestionIndex: Math.min(state.currentQuestionIndex, state.questions.length - 2)
-      };
-
-    default:
-      return state;
-  }
-};
-
-const createClientId = () => {
-  if (typeof crypto !== 'undefined' && crypto?.randomUUID) return crypto.randomUUID();
-  return `client_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-};
-
-const createHostPeerId = (quizId) => {
-  const shortQuizId = String(quizId || 'quiz').replace(/[^a-zA-Z0-9]/g, '').slice(-12);
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `host_${shortQuizId}_${suffix}`;
-};
-
-const PRESENCE_PING_MS = 1500;
-const PRESENCE_STALE_MS = 5000;
-const RELAY_HEARTBEAT_MS = 2000;
-const RELAY_POLL_MS = 800;
+const clampPresence = (value) => Math.max(0, Number(value || 0));
 
 export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostPeerId = null }) => {
-  const [state, dispatch] = useReducer(quizReducer, initialQuiz);
+  const [state, baseDispatch] = useReducer(quizReducer, initialQuiz, ensureQuizV2);
+  const [presence, setPresence] = useState({
+    controller: role === 'controller' ? 1 : 0,
+    display: role === 'display' ? 1 : 0
+  });
+  const [syncStatus, setSyncStatus] = useState(role === 'display' ? 'connecting' : 'local');
+  const [relayHealthy, setRelayHealthy] = useState(false);
+
+  const clientId = useMemo(() => createClientId(), []);
   const channelRef = useRef(null);
-  const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
   const localPeersRef = useRef(new Map());
   const remotePresenceRef = useRef({ controller: 0, display: 0 });
-  const relayVersionRef = useRef(0);
-  const [presence, setPresence] = useState({ controller: 0, display: 0 });
-  const [syncStatus, setSyncStatus] = useState('local');
-
-  const clientId = useMemo(() => createClientId(), []);
+  const lastRemoteStateAtRef = useRef(Date.now());
+  const isApplyingRemoteRef = useRef(false);
 
   const resolvedHostPeerId = useMemo(() => {
-    if (!initialQuiz?.id) return hostPeerId;
-    if (role !== 'controller') return hostPeerId;
-
-    if (typeof window === 'undefined') return hostPeerId;
-
-    const key = `catchphrase_host_peer_${initialQuiz.id}`;
+    if (!state?.id || role !== 'controller') return hostPeerId;
+    const key = `catchphrase_host_peer_${state.id}`;
     if (hostPeerId) {
       localStorage.setItem(key, hostPeerId);
       return hostPeerId;
     }
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const created = createHostPeerId(state.id);
+    localStorage.setItem(key, created);
+    return created;
+  }, [hostPeerId, role, state?.id]);
 
-    const stored = localStorage.getItem(key);
-    if (stored) return stored;
+  const refreshPresence = useCallback(() => {
+    const nextPresence = {
+      controller: role === 'controller' ? 1 : 0,
+      display: role === 'display' ? 1 : 0
+    };
 
-    const generated = createHostPeerId(initialQuiz.id);
-    localStorage.setItem(key, generated);
-    return generated;
-  }, [initialQuiz?.id, role, hostPeerId]);
+    for (const peer of localPeersRef.current.values()) {
+      if (peer.role === 'controller') nextPresence.controller += 1;
+      if (peer.role === 'display') nextPresence.display += 1;
+    }
 
-  const channelName = useMemo(() => {
-    const id = initialQuiz?.id || state?.id || 'unknown';
-    return `quiz_sync_${id}`;
-  }, [initialQuiz?.id]);
+    nextPresence.controller += remotePresenceRef.current.controller;
+    nextPresence.display += remotePresenceRef.current.display;
+    setPresence(nextPresence);
+  }, [role]);
+
+  const applySyncedState = useCallback(
+    (incomingState) => {
+      if (!incomingState?.id) return false;
+      const normalized = ensureQuizV2(incomingState);
+      const expectedId = stateRef.current?.id || normalized.id;
+      if (expectedId !== normalized.id) return false;
+
+      const currentVersion = Number(stateRef.current?.liveState?.syncVersion || -1);
+      const incomingVersion = Number(normalized.liveState?.syncVersion || 0);
+
+      if (role === 'display' && incomingVersion <= currentVersion && !stateRef.current?.isPlaceholder) {
+        return false;
+      }
+
+      isApplyingRemoteRef.current = true;
+      baseDispatch({
+        type: 'LOAD_QUIZ',
+        payload: {
+          ...normalized,
+          isPlaceholder: false
+        },
+        meta: { remote: true }
+      });
+      lastRemoteStateAtRef.current = Date.now();
+      if (role === 'display') {
+        saveDisplaySnapshot(normalized.id, normalized);
+        setSyncStatus('live');
+      }
+      return true;
+    },
+    [role]
+  );
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  const refreshPresence = useCallback(() => {
-    const counts = { controller: 0, display: 0 };
-    for (const peerEntry of localPeersRef.current.values()) {
-      const localRole =
-        typeof peerEntry === 'string'
-          ? peerEntry
-          : peerEntry?.role;
-      if (localRole === 'controller') counts.controller += 1;
-      if (localRole === 'display') counts.display += 1;
-    }
-    counts.controller += remotePresenceRef.current.controller;
-    counts.display += remotePresenceRef.current.display;
-    setPresence(counts);
-  }, []);
-
-  const applySyncedState = useCallback((newState) => {
-    if (!newState || !newState.id) return;
-
-    const expectedId = initialQuiz?.id || stateRef.current?.id;
-    if (expectedId && newState.id !== expectedId) return;
-
-    isRemoteUpdate.current = true;
-    dispatch({
-      type: 'LOAD_QUIZ',
-      payload: { ...newState, isPlaceholder: false }
-    });
-  }, [dispatch, initialQuiz?.id]);
-
-  // Initialize BroadcastChannel
   useEffect(() => {
-    const quizId = initialQuiz?.id;
-    const channel = new BroadcastChannel(channelName);
+    refreshPresence();
+  }, [refreshPresence]);
+
+  useEffect(() => {
+    if (role !== 'controller') return;
+    setSyncStatus(presence.display > 0 ? 'live' : relayHealthy ? 'connecting' : 'local');
+  }, [presence.display, relayHealthy, role]);
+
+  useEffect(() => {
+    if (role !== 'display') return undefined;
+
+    const intervalId = window.setInterval(() => {
+      if (Date.now() - lastRemoteStateAtRef.current > DISPLAY_STALE_MS) {
+        setSyncStatus((current) => (current === 'error' ? current : 'stale'));
+      }
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [role]);
+
+  useEffect(() => {
+    const quizId = state?.id;
+    if (!quizId || typeof BroadcastChannel === 'undefined') return undefined;
+
+    const channel = new BroadcastChannel(`quiz_sync_${quizId}`);
     channelRef.current = channel;
 
-    const send = (message) => {
-      try {
-        channel.postMessage({
-          quizId,
-          sender: clientId,
-          senderRole: role,
-          ...message
-        });
-      } catch {
-        // no-op: BroadcastChannel can throw in unsupported contexts
-      }
+    const send = (type, extra = {}) => {
+      channel.postMessage(createEnvelope(type, quizId, clientId, role, extra));
     };
 
-    const trackPeer = (sender, senderRole) => {
-      if (!sender || sender === clientId || !senderRole) return;
-      const now = Date.now();
-      const prev = localPeersRef.current.get(sender);
-
-      if (prev && typeof prev === 'object' && prev.role === senderRole) {
-        prev.lastSeen = now;
-        return;
-      }
-
-      localPeersRef.current.set(sender, { role: senderRole, lastSeen: now });
-      refreshPresence();
-    };
-
-    const untrackPeer = (sender) => {
-      if (!sender || sender === clientId) return;
-      if (!localPeersRef.current.has(sender)) return;
-      localPeersRef.current.delete(sender);
-      refreshPresence();
-    };
-
-    const sweepStalePeers = () => {
-      const now = Date.now();
+    const sweepPeers = () => {
+      const cutoff = Date.now() - PRESENCE_STALE_MS;
       let changed = false;
-      for (const [sender, peerEntry] of localPeersRef.current.entries()) {
-        if (sender === clientId) continue;
-        const lastSeen =
-          typeof peerEntry === 'object' && typeof peerEntry.lastSeen === 'number'
-            ? peerEntry.lastSeen
-            : 0;
-        if (now - lastSeen > PRESENCE_STALE_MS) {
-          localPeersRef.current.delete(sender);
+
+      for (const [peerId, peer] of localPeersRef.current.entries()) {
+        if (peer.lastSeenAt < cutoff) {
+          localPeersRef.current.delete(peerId);
           changed = true;
         }
       }
+
       if (changed) refreshPresence();
     };
 
     channel.onmessage = (event) => {
-      const msg = event.data;
-      if (!msg || msg.sender === clientId) return;
-      if (quizId && msg.quizId && msg.quizId !== quizId) return;
+      const message = event.data;
+      if (!message || message.clientId === clientId || message.quizId !== quizId) return;
 
-      trackPeer(msg.sender, msg.senderRole);
-      if (msg.to && msg.to !== clientId) return;
+      localPeersRef.current.set(message.clientId, {
+        role: message.role,
+        lastSeenAt: Date.now()
+      });
+      refreshPresence();
 
-      if (msg.type === 'HELLO') {
-        send({ type: 'HELLO_ACK', to: msg.sender });
-        return;
+      if (message.to && message.to !== clientId) return;
+
+      if (message.type === 'REQUEST_SNAPSHOT' && role === 'controller') {
+        send('SNAPSHOT_STATE', {
+          to: message.clientId,
+          syncVersion: stateRef.current.liveState.syncVersion,
+          state: stateRef.current
+        });
       }
 
-      if (msg.type === 'HELLO_ACK') {
-        return;
+      if ((message.type === 'SNAPSHOT_STATE' || message.type === 'STATE_UPDATE') && role === 'display') {
+        applySyncedState(message.state);
       }
 
-      if (msg.type === 'PING') {
-        return;
-      }
-
-      if (msg.type === 'GOODBYE') {
-        untrackPeer(msg.sender);
-        return;
-      }
-
-      if (msg.type === 'REQUEST_SYNC') {
-        // Avoid stale displays "winning" by making the controller authoritative.
-        if (role !== 'controller') return;
-        const latest = stateRef.current;
-        if (!latest) return;
-        send({ type: 'SYNC_STATE_UPDATE', to: msg.sender, payload: latest });
-        return;
-      }
-
-      if (msg.type === 'SYNC_STATE_UPDATE') {
-        applySyncedState(msg.payload);
-        return;
+      if (message.type === 'GOODBYE') {
+        localPeersRef.current.delete(message.clientId);
+        refreshPresence();
       }
     };
 
-    // Announce + request the latest state from any existing controller tab.
-    send({ type: 'HELLO' });
-    send({ type: 'REQUEST_SYNC' });
-    const pingIntervalId = window.setInterval(() => {
-      send({ type: 'PING' });
-      sweepStalePeers();
+    if (role === 'display') {
+      send('REQUEST_SNAPSHOT');
+    }
+
+    const heartbeatId = window.setInterval(() => {
+      send('HEARTBEAT');
+      sweepPeers();
     }, PRESENCE_PING_MS);
 
-    const handleBeforeUnload = () => {
-      send({ type: 'GOODBYE' });
-    };
+    const handleBeforeUnload = () => send('GOODBYE');
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.clearInterval(pingIntervalId);
-      if (channelRef.current) {
-        send({ type: 'GOODBYE' });
-        channelRef.current.close();
-      }
+      window.clearInterval(heartbeatId);
+      send('GOODBYE');
+      channel.close();
+      channelRef.current = null;
     };
-  }, [applySyncedState, channelName, clientId, initialQuiz?.id, refreshPresence, role]); // Only re-init if quiz/role changes
+  }, [applySyncedState, clientId, refreshPresence, role, state?.id]);
 
-  // Server relay sync (cross-device, no DB required).
   useEffect(() => {
-    const quizId = initialQuiz?.id;
-    if (!quizId || typeof window === 'undefined') return;
+    const quizId = state?.id;
+    if (!quizId) return undefined;
 
-    const relayBase = `/api/realtime?quizId=${encodeURIComponent(quizId)}`;
-    const aborter = new AbortController();
+    const relayUrl = buildRelayUrl(quizId);
+    let stopped = false;
+    let pollTimeoutId = null;
 
     const applyRelayResponse = (payload) => {
       if (!payload || typeof payload !== 'object') return;
 
-      if (typeof payload.version === 'number') {
-        relayVersionRef.current = Math.max(relayVersionRef.current, payload.version);
-      }
+      remotePresenceRef.current = {
+        controller: Math.max(0, clampPresence(payload.presence?.controller) - (role === 'controller' ? 1 : 0)),
+        display: Math.max(0, clampPresence(payload.presence?.display) - (role === 'display' ? 1 : 0))
+      };
+      refreshPresence();
 
-      const presencePayload = payload.presence;
-      if (presencePayload && typeof presencePayload === 'object') {
-        remotePresenceRef.current = {
-          controller: Number(presencePayload.controller || 0),
-          display: Number(presencePayload.display || 0)
-        };
-        refreshPresence();
-      }
-
-      if (payload.state?.id === quizId) {
+      if (payload.state) {
         applySyncedState(payload.state);
-        if (role === 'display') {
-          setSyncStatus('connected');
-        }
-      } else if (role === 'display') {
-        setSyncStatus('connecting');
       }
     };
 
-    const relayPost = async (kind, payload = null) => {
+    const relayPost = async (type, payloadState = null) => {
       try {
-        const response = await fetch(relayBase, {
+        const response = await fetch(relayUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: aborter.signal,
           body: JSON.stringify({
-            kind,
+            type,
             role,
             clientId,
-            state: payload
+            syncVersion: payloadState?.liveState?.syncVersion || stateRef.current?.liveState?.syncVersion || 0,
+            state: payloadState
           })
         });
-        if (!response.ok) throw new Error('relay_post_failed');
-        const data = await response.json();
-        applyRelayResponse(data);
+        if (!response.ok) throw new Error('relay_failed');
+        const payload = await response.json();
+        setRelayHealthy(true);
+        applyRelayResponse(payload);
       } catch {
-        if (aborter.signal.aborted) return;
-        if (role === 'display') setSyncStatus('error');
+        setRelayHealthy(false);
+        if (role === 'display' && !stateRef.current?.isPlaceholder) {
+          setSyncStatus('stale');
+        } else if (role === 'display') {
+          setSyncStatus('error');
+        }
       }
     };
 
     const relayPull = async () => {
       try {
-        const response = await fetch(relayBase, {
+        const response = await fetch(relayUrl, {
           method: 'GET',
-          cache: 'no-store',
-          signal: aborter.signal
+          cache: 'no-store'
         });
-        if (!response.ok) throw new Error('relay_pull_failed');
-        const data = await response.json();
-        applyRelayResponse(data);
+        if (!response.ok) throw new Error('relay_failed');
+        const payload = await response.json();
+        setRelayHealthy(true);
+        applyRelayResponse(payload);
       } catch {
-        if (aborter.signal.aborted) return;
-        if (role === 'display') setSyncStatus('error');
+        setRelayHealthy(false);
+        if (role === 'display' && !stateRef.current?.isPlaceholder) {
+          setSyncStatus('stale');
+        } else if (role === 'display') {
+          setSyncStatus('error');
+        }
+      } finally {
+        if (!stopped && role === 'display') {
+          pollTimeoutId = window.setTimeout(relayPull, document.visibilityState === 'hidden' ? RELAY_POLL_MS * 2 : RELAY_POLL_MS);
+        }
       }
     };
 
     const heartbeatId = window.setInterval(() => {
-      void relayPost('heartbeat');
+      void relayPost('HEARTBEAT');
     }, RELAY_HEARTBEAT_MS);
 
-    let pollId = null;
     if (role === 'display') {
-      setSyncStatus('connecting');
+      setSyncStatus(state.isPlaceholder ? 'connecting' : syncStatus);
       void relayPull();
-      pollId = window.setInterval(() => {
-        void relayPull();
-      }, RELAY_POLL_MS);
-    } else {
-      setSyncStatus('ready');
     }
 
     return () => {
-      aborter.abort();
+      stopped = true;
       window.clearInterval(heartbeatId);
-      if (pollId) window.clearInterval(pollId);
-      setSyncStatus('local');
+      if (pollTimeoutId) window.clearTimeout(pollTimeoutId);
     };
-  }, [applySyncedState, clientId, initialQuiz?.id, refreshPresence, role]);
+  }, [applySyncedState, clientId, refreshPresence, role, state?.id]);
 
-  // Auto-save to LocalStorage on state changes (debounced)
-  // AND broadcast changes to other tabs
   useEffect(() => {
-    if (!state || !state.id) return;
+    if (!state?.id) return undefined;
+    if (role === 'controller' && !isApplyingRemoteRef.current) {
+      rememberLastQuizId(state.id);
+      const timeoutId = window.setTimeout(() => {
+        void saveQuiz({
+          ...state,
+          isPlaceholder: false
+        });
+      }, 300);
 
-    const isController = role === 'controller';
+      if (channelRef.current) {
+        channelRef.current.postMessage(
+          createEnvelope('STATE_UPDATE', state.id, clientId, role, {
+            syncVersion: state.liveState.syncVersion,
+            state
+          })
+        );
+      }
 
-    // Only the controller is allowed to broadcast/save. This prevents a newly-opened
-    // display tab (with potentially stale LocalStorage) from clobbering state.
-    if (isController && !isRemoteUpdate.current && channelRef.current) {
-      channelRef.current.postMessage({
-        quizId: state.id,
-        sender: clientId,
-        senderRole: role,
-        type: 'SYNC_STATE_UPDATE',
-        payload: state
-      });
-
-      // Push latest state to relay so displays on other devices can pull updates.
-      void fetch(`/api/realtime?quizId=${encodeURIComponent(state.id)}`, {
+      void fetch(buildRelayUrl(state.id), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          kind: 'state',
+          type: 'STATE_UPDATE',
           role,
           clientId,
+          syncVersion: state.liveState.syncVersion,
           state
         })
       })
         .then((response) => (response.ok ? response.json() : null))
         .then((payload) => {
-          if (!payload || typeof payload.version !== 'number') return;
-          relayVersionRef.current = Math.max(relayVersionRef.current, payload.version);
-          if (payload.presence && typeof payload.presence === 'object') {
-            remotePresenceRef.current = {
-              controller: Number(payload.presence.controller || 0),
-              display: Number(payload.presence.display || 0)
-            };
-            refreshPresence();
-          }
+          if (!payload) return;
+          setRelayHealthy(true);
+          remotePresenceRef.current = {
+            controller: Math.max(0, clampPresence(payload.presence?.controller) - 1),
+            display: clampPresence(payload.presence?.display)
+          };
+          refreshPresence();
         })
         .catch(() => {
-          // no-op: local dev may not expose /api without `vercel dev`
+          setRelayHealthy(false);
         });
+
+      return () => window.clearTimeout(timeoutId);
     }
 
-    // Reset remote update flag for next cycle
-    isRemoteUpdate.current = false;
+    isApplyingRemoteRef.current = false;
 
-    const timeoutId = setTimeout(() => {
-      if (isController) saveQuiz(state);
-    }, 500);
+    if (role === 'display') {
+      saveDisplaySnapshot(state.id, state);
+    }
 
-    return () => clearTimeout(timeoutId);
-  }, [state, clientId, refreshPresence, role]);
+    return undefined;
+  }, [clientId, refreshPresence, role, state]);
+
+  useEffect(() => {
+    if (role !== 'controller' || !state.liveState.timer.isRunning) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      const current = stateRef.current.questions[stateRef.current.liveState.currentQuestionIndex];
+      if (!current || areAllSquaresRevealed(current)) {
+        baseDispatch({ type: 'STOP_TIMER' });
+        return;
+      }
+      baseDispatch({ type: 'ADVANCE_REVEAL' });
+    }, state.liveState.timer.intervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [role, state.liveState.timer.intervalMs, state.liveState.timer.isRunning, state.liveState.currentQuestionIndex]);
+
+  const dispatch = useCallback((action) => {
+    baseDispatch(action);
+  }, []);
+
+  const actions = useMemo(() => ({
+    setScene: (scene) => dispatch({ type: 'SET_SCENE', payload: scene }),
+    jumpToQuestion: (index) => dispatch({ type: 'SET_CURRENT_QUESTION', payload: index }),
+    nextQuestion: () => dispatch({ type: 'NEXT_QUESTION' }),
+    previousQuestion: () => dispatch({ type: 'PREV_QUESTION' }),
+    revealSquare: (squareNumber) => dispatch({ type: 'REVEAL_SQUARE', payload: squareNumber }),
+    revealRandom: () => dispatch({ type: 'REVEAL_RANDOM' }),
+    advanceReveal: () => dispatch({ type: 'ADVANCE_REVEAL' }),
+    undoLastReveal: () => dispatch({ type: 'UNDO_LAST_REVEAL' }),
+    revealAll: () => dispatch({ type: 'REVEAL_ALL' }),
+    setRevealSequence: (questionIndex, sequence) => dispatch({ type: 'SET_REVEAL_SEQUENCE', payload: { questionIndex, sequence } }),
+    resetCurrentQuestion: () => dispatch({ type: 'RESET_CURRENT_QUESTION' }),
+    resetQuiz: () => dispatch({ type: 'RESET_ALL_QUESTIONS' }),
+    setTimerInterval: (interval) => dispatch({ type: 'SET_TIMER_INTERVAL', payload: interval }),
+    startTimer: () => dispatch({ type: 'START_TIMER' }),
+    pauseTimer: () => dispatch({ type: 'PAUSE_TIMER' }),
+    stopTimer: () => dispatch({ type: 'STOP_TIMER' }),
+    applyAssetStatus: (questionIndex, assetStatus) => dispatch({ type: 'APPLY_ASSET_STATUS', payload: { questionIndex, assetStatus } })
+  }), [dispatch]);
 
   return (
     <QuizContext.Provider
       value={{
         state,
-        dispatch,
+        role,
         presence,
+        syncStatus,
+        relayHealthy,
         hostPeerId: resolvedHostPeerId,
-        syncStatus
+        actions
       }}
     >
       {children}
@@ -555,7 +418,9 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
 export const useQuiz = () => {
   const context = useContext(QuizContext);
   if (!context) {
-    throw new Error('useQuiz must be used within a QuizProvider');
+    throw new Error('useQuiz must be used within QuizProvider.');
   }
   return context;
 };
+
+export const useCachedDisplayState = (quizId) => getDisplaySnapshot(quizId);
