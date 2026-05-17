@@ -18,11 +18,11 @@ A Catchphrase-style quiz web app for a quiz master (phone) plus a clean "display
   - Controller View (phone): Touch-optimized quiz master controls
   - Display View (big screen): Clean broadcast-quality presentation
 - Cross-device live sync:
-  - Controller pushes state to a Vercel serverless relay (no database required)
-  - Displays can join from other devices and poll the relay for live updates
+  - Controller pushes state to a best-effort Vercel serverless relay (no database required)
+  - Displays can join from other devices and poll the relay for live updates while the relay instance remains warm
 - Optional video questions:
   - YouTube embed (stable) or direct MP4 URL
-- LocalStorage persistence
+- IndexedDB persistence with localStorage for lightweight profile/session markers
 - Multi-question support with navigation
 - Reset functionality for questions or entire quiz
 - Username-based quiz management
@@ -80,7 +80,7 @@ npm run preview
     - Clean presentation perfect for mirroring
     - Question counter
 
-> Note: Same-device tabs sync instantly with `BroadcastChannel`. Cross-device sync uses the `/api/realtime?quizId=...` in-memory relay on Vercel (no DB setup). Relay sessions are ephemeral by design.
+> Note: Same-device tabs sync instantly with `BroadcastChannel`. Cross-device sync uses the `/api/realtime?quizId=...` in-memory relay on Vercel (no DB setup). Relay sessions are ephemeral and best-effort by design; for the most reliable show setup, keep the controller and display in the same browser session and cast or mirror that display tab.
 
 ### Loading a Saved Quiz
 
@@ -95,7 +95,7 @@ npm run preview
 - Vite
 - Tailwind CSS
 - React Router
-- LocalStorage API
+- IndexedDB and LocalStorage APIs
 
 ## Project Structure
 

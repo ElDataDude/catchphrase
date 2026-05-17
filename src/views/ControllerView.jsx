@@ -209,11 +209,11 @@ const ControllerView = () => {
   };
 
   return (
-    <div className="page-shell space-y-4">
-      <div className="surface-strong p-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="text-white/50 uppercase tracking-[0.2em] text-xs">{state.username}</div>
-          <h1 className="text-white font-black text-2xl">{state.name}</h1>
+    <div className="page-shell space-y-3 md:space-y-4">
+      <div className="surface-strong p-3 sm:p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-white/50 uppercase tracking-[0.18em] text-xs">{state.username}</div>
+          <h1 className="text-white font-black text-xl sm:text-2xl truncate">{state.name}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <StatusBadge status={syncStatus} />
             <span className="text-white/55 text-sm">
@@ -230,23 +230,63 @@ const ControllerView = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={() => actions.setScene('title')}>
-            Title Scene
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+          <button type="button" className="btn-secondary px-3 py-3 text-xs sm:text-sm" onClick={() => actions.setScene('title')}>
+            Title
           </button>
-          <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={() => navigate(`/quiz/${state.id}/edit`)}>
-            Edit Quiz
+          <button type="button" className="btn-secondary px-3 py-3 text-xs sm:text-sm" onClick={() => navigate(`/quiz/${state.id}/edit`)}>
+            Edit
           </button>
-          <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={() => navigate('/library')}>
+          <button type="button" className="btn-secondary px-3 py-3 text-xs sm:text-sm" onClick={() => navigate('/library')}>
             Exit
           </button>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.3fr,0.9fr]">
-        <div className="space-y-4">
-          <div className="surface-strong p-4 space-y-4">
-            <div className="aspect-video rounded-[28px] overflow-hidden ring-1 ring-white/10">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
+        <div className="min-w-0 space-y-4">
+          <section className="surface-strong p-3 sm:p-4 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="surface-soft rounded-lg p-3">
+                <div className="text-white/50 text-[10px] uppercase tracking-[0.16em]">Current</div>
+                <div className="text-white font-bold text-sm sm:text-base truncate">{buildQuestionLabel(currentQuestion, currentIndex)}</div>
+              </div>
+              <div className="surface-soft rounded-lg p-3">
+                <div className="text-white/50 text-[10px] uppercase tracking-[0.16em]">Reveal</div>
+                <div className="text-white font-bold text-sm sm:text-base">{allRevealed ? 'All revealed' : `${unrevealedCount} hidden`}</div>
+              </div>
+              <div className="surface-soft rounded-lg p-3">
+                <div className="text-white/50 text-[10px] uppercase tracking-[0.16em]">Sequence</div>
+                <div className="text-white font-bold text-sm sm:text-base">{nextSequenceSquare || 'None queued'}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <button type="button" className="btn-primary col-span-2 min-h-[68px] py-4 px-4 text-lg sm:col-span-1 sm:min-h-[56px] sm:py-3 sm:text-sm" onClick={actions.advanceReveal} disabled={allRevealed && state.liveState.scene === 'question'}>
+                Next
+              </button>
+              <button type="button" className="btn-primary min-h-[56px] py-3 px-4 text-base sm:text-sm" onClick={actions.revealRandom} disabled={allRevealed}>
+                Random
+              </button>
+              <button type="button" className="btn-secondary min-h-[52px] py-3 px-4 text-sm" onClick={actions.undoLastReveal} disabled={!canUndo}>
+                Undo
+              </button>
+              <button type="button" className="btn-secondary min-h-[52px] py-3 px-4 text-sm" onClick={() => actions.setScene('answer')}>
+                Answer
+              </button>
+              <button type="button" className="btn-secondary min-h-[52px] py-3 px-4 text-sm" onClick={() => actions.setScene('blank')}>
+                Blank
+              </button>
+              <button type="button" className="btn-secondary min-h-[52px] py-3 px-4 text-sm" onClick={actions.nextQuestion} disabled={currentIndex === state.questions.length - 1}>
+                Next Question
+              </button>
+            </div>
+
+            <div className="text-white/55 text-xs sm:text-sm">Shortcuts: Space / N, U, A, B, arrows, R.</div>
+          </section>
+
+          <div className="surface-strong p-3 sm:p-4 space-y-3">
+            <div className="aspect-video rounded-lg overflow-hidden ring-1 ring-white/10">
               <LiveSceneStage
                 quiz={state}
                 question={currentQuestion}
@@ -255,51 +295,6 @@ const ControllerView = () => {
                 interactive={state.liveState.scene === 'question'}
                 onRevealSquare={actions.revealSquare}
               />
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="surface-soft rounded-2xl p-3">
-                <div className="text-white/50 text-xs uppercase tracking-[0.2em]">Current</div>
-                <div className="text-white font-bold">{buildQuestionLabel(currentQuestion, currentIndex)}</div>
-              </div>
-              <div className="surface-soft rounded-2xl p-3">
-                <div className="text-white/50 text-xs uppercase tracking-[0.2em]">Reveal</div>
-                <div className="text-white font-bold">{allRevealed ? 'All revealed' : `${unrevealedCount} hidden`}</div>
-              </div>
-              <div className="surface-soft rounded-2xl p-3">
-                <div className="text-white/50 text-xs uppercase tracking-[0.2em]">Sequence</div>
-                <div className="text-white font-bold">{nextSequenceSquare || 'None queued'}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="surface-strong p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-white font-black text-base">Live Rail</div>
-                <div className="text-white/60 text-sm">Keyboard shortcuts: Space / N, U, A, B, arrows, R.</div>
-              </div>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <button type="button" className="btn-primary py-3 px-4 text-sm" onClick={actions.revealRandom} disabled={allRevealed}>
-                Random
-              </button>
-              <button type="button" className="btn-primary py-3 px-4 text-sm" onClick={actions.advanceReveal} disabled={allRevealed && state.liveState.scene === 'question'}>
-                Next
-              </button>
-              <button type="button" className="btn-secondary py-3 px-4 text-sm" onClick={actions.undoLastReveal} disabled={!canUndo}>
-                Undo
-              </button>
-              <button type="button" className="btn-secondary py-3 px-4 text-sm" onClick={() => actions.setScene('answer')}>
-                Answer
-              </button>
-              <button type="button" className="btn-secondary py-3 px-4 text-sm" onClick={() => actions.setScene('blank')}>
-                Blank
-              </button>
-              <button type="button" className="btn-secondary py-3 px-4 text-sm" onClick={actions.nextQuestion} disabled={currentIndex === state.questions.length - 1}>
-                Next Question
-              </button>
             </div>
           </div>
 
@@ -312,15 +307,15 @@ const ControllerView = () => {
           />
         </div>
 
-        <div className="space-y-4">
-          <div className="surface-strong p-3">
-            <div className="grid grid-cols-5 gap-2">
+        <div className="min-w-0 space-y-4">
+          <div className="surface-strong p-2">
+            <div className="flex gap-2 overflow-x-auto">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-2xl py-3 px-3 text-xs font-black transition ${activeTab === tab.id ? 'bg-cyan-300 text-slate-950' : 'bg-white/8 text-white hover:bg-white/14'}`}
+                  className={`min-w-[72px] flex-1 rounded-lg py-3 px-2 text-xs font-black transition ${activeTab === tab.id ? 'bg-cyan-300 text-zinc-950' : 'bg-white/[0.08] text-white hover:bg-white/[0.12]'}`}
                 >
                   {tab.label}
                 </button>
@@ -330,17 +325,17 @@ const ControllerView = () => {
 
           {renderTab()}
 
-          <div className="surface-strong p-4 flex flex-wrap gap-2">
-            <button type="button" className="btn-danger px-4 py-3 text-sm" onClick={() => setResetTarget('question')}>
+          <div className="surface-strong p-3 sm:p-4 grid grid-cols-2 gap-2">
+            <button type="button" className="btn-danger px-3 py-3 text-xs sm:text-sm" onClick={() => setResetTarget('question')}>
               Reset Question
             </button>
-            <button type="button" className="btn-danger px-4 py-3 text-sm" onClick={() => setResetTarget('quiz')}>
+            <button type="button" className="btn-danger px-3 py-3 text-xs sm:text-sm" onClick={() => setResetTarget('quiz')}>
               Reset Quiz
             </button>
-            <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={() => void handleCopyLink()}>
+            <button type="button" className="btn-secondary px-3 py-3 text-xs sm:text-sm" onClick={() => void handleCopyLink()}>
               Copy Display Link
             </button>
-            <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={handleOpenDisplay}>
+            <button type="button" className="btn-secondary px-3 py-3 text-xs sm:text-sm" onClick={handleOpenDisplay}>
               Open Display
             </button>
           </div>

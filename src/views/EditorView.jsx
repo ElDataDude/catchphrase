@@ -4,7 +4,7 @@ import BulkImportPanel from '../components/BulkImportPanel';
 import QuestionEditorCard from '../components/QuestionEditorCard';
 import { probeQuestionMedia } from '../lib/mediaPreflight';
 import { importQuestionsFromText } from '../lib/questionImport';
-import { createQuestion, createQuiz, ensureQuizV2 } from '../lib/quizSchema';
+import { copyQuestionWithFreshId, createQuestion, createQuiz, ensureQuizV2 } from '../lib/quizSchema';
 import {
   clearSnapshot,
   getLastProfile,
@@ -130,7 +130,7 @@ const EditorView = () => {
 
   const duplicateQuestion = (index) => {
     setDraft((current) => {
-      const nextQuestion = createQuestion(current.questions[index]);
+      const nextQuestion = copyQuestionWithFreshId(current.questions[index]);
       return {
         ...current,
         questions: [

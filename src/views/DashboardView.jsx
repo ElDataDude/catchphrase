@@ -7,6 +7,7 @@ const DashboardView = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [recentQuizzes, setRecentQuizzes] = useState([]);
+  const [quizCount, setQuizCount] = useState(0);
   const [lastQuizId, setLastQuizId] = useState(null);
   const [importMessage, setImportMessage] = useState('');
   const { canInstall, promptToInstall } = useInstallPrompt();
@@ -14,7 +15,8 @@ const DashboardView = () => {
   useEffect(() => {
     const loadDashboard = async () => {
       const quizzes = await listQuizzes();
-      setRecentQuizzes(quizzes.slice(0, 4));
+      setQuizCount(quizzes.length);
+      setRecentQuizzes(quizzes.slice(0, 5));
       setLastQuizId(getLastQuizId());
     };
 
@@ -40,12 +42,29 @@ const DashboardView = () => {
   return (
     <div className="dashboard-shell">
       <div className="dashboard-hero">
-        <div className="space-y-4">
-          <div className="text-white/60 uppercase tracking-[0.35em] text-xs">Catchphrase v2</div>
-          <h1 className="dashboard-title">Show-ready control for quiz nights, casting, and chaos.</h1>
-          <p className="dashboard-copy">
-            Build quizzes locally, preflight media before you go live, and run controller and display screens without a full backend.
-          </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <div className="text-white/55 uppercase tracking-[0.24em] text-xs">Catchphrase operator console</div>
+            <h1 className="dashboard-title">Prepare, check, and run the next show.</h1>
+            <p className="dashboard-copy">
+              Local quiz library, media preflight, controller, and display launch controls in one place.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 lg:min-w-[360px]">
+            <div className="surface-soft rounded-lg p-3">
+              <div className="text-white/50 text-[10px] uppercase tracking-[0.18em]">Library</div>
+              <div className="text-white text-2xl font-black">{quizCount}</div>
+            </div>
+            <div className="surface-soft rounded-lg p-3">
+              <div className="text-white/50 text-[10px] uppercase tracking-[0.18em]">Recent</div>
+              <div className="text-white text-2xl font-black">{recentQuizzes.length}</div>
+            </div>
+            <div className="surface-soft rounded-lg p-3">
+              <div className="text-white/50 text-[10px] uppercase tracking-[0.18em]">Mode</div>
+              <div className="text-white text-base font-black leading-8">Local</div>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -68,11 +87,11 @@ const DashboardView = () => {
         <input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={handleImportFile} />
 
         {importMessage && (
-          <div className="surface-soft rounded-2xl px-4 py-3 text-sm text-white/75">{importMessage}</div>
+          <div className="surface-soft rounded-lg px-4 py-3 text-sm text-white/75">{importMessage}</div>
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr,0.9fr]">
+      <div className="grid gap-4 lg:grid-cols-[1.4fr,0.9fr]">
         <section className="surface-strong p-5 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -86,7 +105,7 @@ const DashboardView = () => {
 
           <div className="grid gap-3">
             {recentQuizzes.length === 0 && (
-              <div className="surface-soft rounded-2xl p-4 text-white/65 text-sm">
+              <div className="surface-soft rounded-lg p-4 text-white/65 text-sm">
                 No saved quizzes yet. Create one or import a bundle to get started.
               </div>
             )}
@@ -96,7 +115,7 @@ const DashboardView = () => {
                 key={quiz.id}
                 type="button"
                 onClick={() => navigate(`/quiz/${quiz.id}?view=controller`)}
-                className="surface-soft rounded-2xl p-4 text-left hover:ring-1 hover:ring-white/20 transition"
+                className="surface-soft rounded-lg p-4 text-left hover:bg-white/[0.09] hover:ring-1 hover:ring-white/20 transition"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -111,8 +130,11 @@ const DashboardView = () => {
                       questions
                     </div>
                   </div>
-                  <div className="text-right text-white/45 text-xs uppercase tracking-[0.2em]">
-                    {quiz.lastOpenedAt ? new Date(quiz.lastOpenedAt).toLocaleDateString() : 'New'}
+                  <div className="shrink-0 text-right">
+                    <div className="text-white/45 text-xs uppercase tracking-[0.16em]">
+                      {quiz.lastOpenedAt ? new Date(quiz.lastOpenedAt).toLocaleDateString() : 'New'}
+                    </div>
+                    <div className="text-cyan-200 text-xs font-black mt-1">Run</div>
                   </div>
                 </div>
               </button>
@@ -135,10 +157,10 @@ const DashboardView = () => {
             {lastQuizId ? 'Resume Last Session' : 'No Previous Session'}
           </button>
 
-          <div className="surface-soft rounded-2xl p-4 space-y-3">
-            <div className="text-white font-bold">Browser-first workflow</div>
+          <div className="surface-soft rounded-lg p-4 space-y-3">
+            <div className="text-white font-bold">Show handoff</div>
             <div className="text-white/65 text-sm">
-              Durable quiz storage lives locally. Cross-device display sync stays lightweight and ephemeral, with casting as the fallback.
+              Store quizzes locally, open the controller, then use Join to copy a display link or fall back to casting the same tab.
             </div>
           </div>
         </section>

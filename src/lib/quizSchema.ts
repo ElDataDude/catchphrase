@@ -87,6 +87,12 @@ export const createQuestion = (seed: Partial<any> = {}) => ({
   }
 });
 
+export const copyQuestionWithFreshId = (question: any) =>
+  createQuestion({
+    ...question,
+    id: undefined
+  });
+
 export const createQuiz = (seed: Partial<any> = {}) => {
   const createdAt = normalizeText(seed.createdAt) || nowIso();
   const updatedAt = normalizeText(seed.updatedAt) || createdAt;
@@ -223,8 +229,7 @@ export const duplicateQuiz = (quiz: any) => {
   const source = ensureQuizV2(quiz);
   const duplicatedQuestions = source.questions.map((question: any) =>
     createQuestion({
-      ...question,
-      id: undefined,
+      ...copyQuestionWithFreshId(question),
       reveal: {
         ...question.reveal,
         revealedSquares: [],

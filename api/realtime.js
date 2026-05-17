@@ -91,6 +91,8 @@ const normalizeState = (value, quizId) => {
 };
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+
   const quizId = normalizeQuizId(req.query?.quizId);
   if (!quizId) {
     res.status(400).json({ ok: false, error: 'missing_quiz_id' });
@@ -103,7 +105,6 @@ export default async function handler(req, res) {
   cleanupSessions(store);
 
   if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.status(200).json({
       ok: true,
       version: session.version,
@@ -145,7 +146,6 @@ export default async function handler(req, res) {
   prunePresence(session);
   session.lastSeenAt = now;
 
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
   res.status(200).json({
     ok: true,
     version: session.version,

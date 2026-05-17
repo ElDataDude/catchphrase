@@ -128,13 +128,13 @@ const VideoDisplay = ({ url, startTime = 0, duration = 10, fitMode = 'contain' }
       )}
 
       {isLoading && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 pointer-events-none">
           <div className="w-12 h-12 border-4 border-white/20 border-t-white/80 rounded-full animate-spin" />
         </div>
       )}
 
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white p-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 text-white p-4">
           <div className="text-red-400 font-bold mb-2">Video Error</div>
           <div className="text-sm text-white/60 text-center max-w-md">{error}</div>
         </div>

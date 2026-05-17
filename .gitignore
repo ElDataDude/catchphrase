@@ -3,6 +3,8 @@ dist
 
 server.log
 *-player-script.js
+test-results
+playwright-report
 
 .DS_Store
 
