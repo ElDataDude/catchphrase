@@ -3,7 +3,6 @@ import LiveSceneStage from '../components/LiveSceneStage';
 import StatusBadge from '../components/StatusBadge';
 import { useQuiz } from '../contexts/QuizContext';
 import { preloadQuestionMedia } from '../lib/mediaPreflight';
-import { buildQuestionLabel } from '../lib/quizSchema';
 
 const DisplayView = () => {
   const { state, presence, syncStatus } = useQuiz();
@@ -20,13 +19,20 @@ const DisplayView = () => {
     }
   }, [currentQuestion, nextQuestion]);
 
-  if (state.isPlaceholder && !currentQuestion) {
+  const statusMessage = (() => {
+    if (syncStatus === 'stale') return 'Relay has not confirmed a fresh update. Holding the last frame.';
+    if (syncStatus === 'error') return 'Relay is unavailable. Keep this tab open and use cast or mirror as backup.';
+    if (presence.controller === 0) return 'No controller heartbeat yet. Waiting without changing the frame.';
+    return '';
+  })();
+
+  if (state.isPlaceholder) {
     return (
       <div className="display-shell">
-        <div className="surface-strong p-8 max-w-md w-full text-center">
-          <h2 className="text-white font-black text-3xl mb-3">Waiting for controller…</h2>
-          <p className="text-white/65">
-            Keep this display open. It will attach to the controller automatically when a live snapshot arrives.
+        <div className="bg-white text-zinc-950 p-6 max-w-md w-[calc(100%-2rem)] text-center shadow-2xl">
+          <h2 className="font-black text-2xl mb-3">Waiting for controller...</h2>
+          <p className="text-zinc-700">
+            Keep this display open. It will show the live frame after the controller sends a snapshot.
           </p>
         </div>
       </div>
@@ -45,32 +51,12 @@ const DisplayView = () => {
         />
       </div>
 
-      <div className="display-topbar">
-        <div>
-          <div className="text-white/55 text-xs uppercase tracking-[0.3em]">{state.name}</div>
-          <div className="text-white font-bold text-lg">{buildQuestionLabel(currentQuestion, currentIndex)}</div>
-        </div>
-        <div className="flex items-center gap-3">
-          <StatusBadge status={syncStatus} />
-          <div className="text-white/65 text-sm">
-            Q
-            {' '}
-            {currentIndex + 1}
-            {' '}
-            /
-            {' '}
-            {state.questions.length}
+      {statusMessage && (
+        <div className="display-status-banner" aria-live="polite">
+          <div className="flex items-start gap-3">
+            <StatusBadge status={syncStatus === 'live' ? 'stale' : syncStatus} />
+            <div>{statusMessage}</div>
           </div>
-        </div>
-      </div>
-
-      {(presence.controller === 0 || syncStatus === 'stale' || syncStatus === 'error') && (
-        <div className="display-status-banner">
-          {syncStatus === 'stale'
-            ? 'Signal stale. Holding the last good frame.'
-            : syncStatus === 'error'
-              ? 'Display relay offline. Keep this screen open and cast locally if needed.'
-              : 'Waiting for controller heartbeat…'}
         </div>
       )}
     </div>

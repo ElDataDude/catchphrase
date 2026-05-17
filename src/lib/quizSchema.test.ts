@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { createQuiz, migrateLegacyQuiz } from './quizSchema';
+import {
+  copyQuestionWithFreshId,
+  createQuestion,
+  createQuiz,
+  duplicateQuiz,
+  exportQuizBundle,
+  migrateLegacyQuiz,
+  parseQuizBundle
+} from './quizSchema';
 
 describe('quizSchema', () => {
   it('migrates a legacy quiz into the v2 schema', () => {
@@ -42,5 +50,59 @@ describe('quizSchema', () => {
     expect(quiz.questions).toHaveLength(1);
     expect(quiz.settings.theme).toBe('studio');
     expect(quiz.liveState.scene).toBe('question');
+  });
+
+  it('copies a question with a fresh id while preserving content', () => {
+    const source = createQuestion({
+      id: 'q_original',
+      title: 'Logo wall',
+      answer: 'Acme',
+      category: 'Brands',
+      media: { kind: 'image', src: 'https://example.com/logo.png', fitMode: 'contain' },
+      reveal: { sequence: [1, 2, 3], revealedSquares: [1], revealHistory: [1] }
+    });
+
+    const copied = copyQuestionWithFreshId(source);
+
+    expect(copied.id).not.toBe(source.id);
+    expect(copied.title).toBe(source.title);
+    expect(copied.answer).toBe(source.answer);
+    expect(copied.media).toEqual(source.media);
+    expect(copied.reveal).toEqual(source.reveal);
+  });
+
+  it('duplicates a quiz with fresh unique question ids', () => {
+    const source = createQuiz({
+      id: 'quiz_original',
+      username: 'host',
+      name: 'Original',
+      questions: [
+        createQuestion({ id: 'q_one', title: 'One' }),
+        createQuestion({ id: 'q_two', title: 'Two' })
+      ]
+    });
+
+    const duplicated = duplicateQuiz(source);
+    const duplicatedIds = duplicated.questions.map((question) => question.id);
+
+    expect(duplicated.id).not.toBe(source.id);
+    expect(new Set(duplicatedIds).size).toBe(duplicatedIds.length);
+    expect(duplicatedIds).not.toContain('q_one');
+    expect(duplicatedIds).not.toContain('q_two');
+  });
+
+  it('keeps export and parse round-trips compatible', () => {
+    const quiz = createQuiz({
+      id: 'quiz_export',
+      questions: [
+        createQuestion({ id: 'q_export_one', title: 'One' }),
+        createQuestion({ id: 'q_export_two', title: 'Two' })
+      ]
+    });
+
+    const parsed = parseQuizBundle(exportQuizBundle(quiz));
+
+    expect(parsed.id).toBe(quiz.id);
+    expect(parsed.questions.map((question) => question.id)).toEqual(['q_export_one', 'q_export_two']);
   });
 });

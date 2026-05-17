@@ -27,13 +27,13 @@ const ImageDisplay = ({ imageUrl, alt = 'Quiz media', fitMode = 'cover' }) => {
   return (
     <div className="absolute inset-0 w-full h-full">
       {imageUrl && isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80">
           <div className="text-white text-xl font-extrabold">Loading image...</div>
         </div>
       )}
 
       {hasError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90">
           <div className="text-center text-white p-4">
             <div className="text-4xl mb-3 font-black">!</div>
             <div className="text-xl font-extrabold">Image failed to load</div>
@@ -54,7 +54,7 @@ const ImageDisplay = ({ imageUrl, alt = 'Quiz media', fitMode = 'cover' }) => {
       )}
 
       {!imageUrl && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90">
           <div className="text-white/80 text-xl font-extrabold">No image set</div>
         </div>
       )}

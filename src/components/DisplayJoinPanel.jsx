@@ -2,8 +2,32 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import StatusBadge from './StatusBadge';
 
+const relayCopy = {
+  local: {
+    badge: 'Relay local',
+    body: 'This controller can run the show here. For another screen, use cast or mirror unless the relay becomes live.'
+  },
+  connecting: {
+    badge: 'Relay check',
+    body: 'Trying to reach the relay. Displays may not follow this controller until it connects.'
+  },
+  live: {
+    badge: 'Relay live',
+    body: 'Relay is accepting updates. Remote displays should follow while this controller tab stays open.'
+  },
+  stale: {
+    badge: 'Relay stale',
+    body: 'The relay has not confirmed recent updates. Displays may hold the last good frame.'
+  },
+  error: {
+    badge: 'Relay error',
+    body: 'The relay is unavailable. Keep the display local and use cast or mirror as the fallback.'
+  }
+};
+
 const DisplayJoinPanel = ({ link, syncStatus, displayCount, onCopy, onOpen }) => {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+  const relayInfo = relayCopy[syncStatus] || relayCopy.local;
 
   useEffect(() => {
     let cancelled = false;
@@ -11,8 +35,8 @@ const DisplayJoinPanel = ({ link, syncStatus, displayCount, onCopy, onOpen }) =>
       margin: 1,
       width: 220,
       color: {
-        dark: '#f8fafc',
-        light: '#00000000'
+        dark: '#111827',
+        light: '#ffffff'
       }
     })
       .then((result) => {
@@ -32,23 +56,23 @@ const DisplayJoinPanel = ({ link, syncStatus, displayCount, onCopy, onOpen }) =>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-white font-black text-base">Display Join</h3>
-          <p className="text-white/60 text-sm">Scan the QR code or copy the display URL to another device.</p>
+          <p className="text-white/60 text-sm">Scan the QR code or copy the display URL to another screen.</p>
         </div>
-        <StatusBadge status={syncStatus} />
+        <StatusBadge status={syncStatus}>{relayInfo.badge}</StatusBadge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[220px,1fr]">
-        <div className="surface-soft rounded-2xl p-4 flex items-center justify-center min-h-[220px]">
+      <div className="grid gap-4 md:grid-cols-[252px,1fr]">
+        <div className="rounded-lg bg-white p-4 flex items-center justify-center min-h-[252px]">
           {qrCodeDataUrl ? (
             <img src={qrCodeDataUrl} alt="Display QR code" className="w-[220px] h-[220px]" />
           ) : (
-            <div className="text-white/50 text-sm text-center">QR preview unavailable</div>
+            <div className="text-zinc-600 text-sm text-center">QR preview unavailable</div>
           )}
         </div>
 
         <div className="space-y-3">
           <div className="text-white/70 text-sm">
-            Displays connected:
+            Displays seen:
             {' '}
             <span className="text-white font-bold">{displayCount}</span>
           </div>
@@ -62,11 +86,9 @@ const DisplayJoinPanel = ({ link, syncStatus, displayCount, onCopy, onOpen }) =>
             </button>
           </div>
 
-          {syncStatus !== 'live' && (
-            <div className="surface-soft rounded-2xl p-3 text-sm text-white/70">
-              If cross-device sync is flaky, keep the display on the same browser session and cast or mirror that tab.
-            </div>
-          )}
+          <div className="surface-soft rounded-lg p-3 text-sm text-white/70">
+            {relayInfo.body}
+          </div>
         </div>
       </div>
     </div>

@@ -28,13 +28,14 @@ const LiveSceneStage = ({
 }) => {
   const progress = useCountdownProgress(quiz.liveState.timer);
   const themeClass = `theme-${quiz.settings.theme}`;
+  const stageClass = `h-full w-full stage-shell ${displayMode ? 'stage-shell-broadcast' : ''} ${themeClass}`;
 
   const roundLabel = question?.roundLabel || 'Catchphrase';
   const questionLabel = useMemo(() => buildQuestionLabel(question, questionIndex || 0), [question, questionIndex]);
 
   if (!question) {
     return (
-      <div className={`h-full w-full stage-shell ${themeClass}`}>
+      <div className={stageClass}>
         <div className="stage-empty">No question available</div>
       </div>
     );
@@ -42,7 +43,7 @@ const LiveSceneStage = ({
 
   if (scene === 'blank') {
     return (
-      <div className={`h-full w-full stage-shell ${themeClass}`}>
+      <div className={stageClass}>
         <div className="stage-empty text-2xl font-black tracking-[0.3em] uppercase">Blank</div>
       </div>
     );
@@ -50,7 +51,7 @@ const LiveSceneStage = ({
 
   if (scene === 'title') {
     return (
-      <div className={`h-full w-full stage-shell ${themeClass}`}>
+      <div className={stageClass}>
         <div className="absolute inset-0 opacity-35">
           <MediaStage media={question.media} alt={questionLabel} />
         </div>
@@ -75,7 +76,7 @@ const LiveSceneStage = ({
   }
 
   return (
-    <div className={`h-full w-full stage-shell ${themeClass}`}>
+    <div className={stageClass}>
       <div className="absolute inset-0">
         <MediaStage media={question.media} alt={questionLabel} />
       </div>
@@ -100,7 +101,7 @@ const LiveSceneStage = ({
         </div>
       )}
 
-      {quiz.settings.showLowerThird && scene !== 'title' && (
+      {quiz.settings.showLowerThird && scene === 'question' && (
         <div className="stage-lower-third">
           <div className="stage-kicker">{roundLabel}</div>
           <div className="stage-lower-title">{questionLabel}</div>

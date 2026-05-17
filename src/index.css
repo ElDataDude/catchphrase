@@ -3,11 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --app-bg:
-    radial-gradient(1200px circle at 0% 0%, rgba(66, 153, 225, 0.16), transparent 48%),
-    radial-gradient(900px circle at 100% 0%, rgba(245, 158, 11, 0.12), transparent 42%),
-    radial-gradient(700px circle at 50% 100%, rgba(34, 197, 94, 0.08), transparent 48%),
-    linear-gradient(180deg, #07111f 0%, #091424 50%, #050b16 100%);
+  --app-bg: #0c0f14;
   color: rgb(241 245 249);
   font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", sans-serif;
 }
@@ -35,16 +31,8 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
+  display: none;
   pointer-events: none;
-  opacity: 0.08;
-  background:
-    repeating-linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.05) 0px,
-      rgba(255, 255, 255, 0.05) 1px,
-      transparent 1px,
-      transparent 12px
-    );
 }
 
 button,
@@ -56,47 +44,47 @@ select {
 
 @layer components {
   .page-shell {
-    @apply mx-auto max-w-[1560px] px-4 py-5 md:px-6 lg:px-8;
+    @apply mx-auto max-w-[1560px] px-3 py-4 sm:px-4 md:px-6 lg:px-8;
   }
 
   .dashboard-shell {
-    @apply mx-auto max-w-[1480px] px-4 py-6 md:px-6 lg:px-8 space-y-6;
+    @apply mx-auto max-w-[1480px] px-3 py-4 sm:px-4 md:px-6 lg:px-8 space-y-4;
   }
 
   .dashboard-hero {
-    @apply surface-strong p-6 md:p-8 space-y-6;
+    @apply surface-strong p-4 md:p-5 space-y-4;
   }
 
   .dashboard-title {
-    @apply text-4xl md:text-6xl font-black max-w-4xl tracking-tight;
+    @apply text-2xl md:text-4xl font-black max-w-4xl tracking-tight;
   }
 
   .dashboard-copy {
-    @apply text-white/65 text-base md:text-lg max-w-3xl;
+    @apply text-white/70 text-sm md:text-base max-w-3xl;
   }
 
   .surface {
-    @apply rounded-[28px] bg-black/35 ring-1 ring-white/10 backdrop-blur-xl shadow-[0_24px_80px_rgba(2,6,23,0.25)];
+    @apply rounded-lg bg-zinc-950/70 ring-1 ring-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.22)];
   }
 
   .surface-strong {
-    @apply rounded-[32px] bg-black/45 ring-1 ring-white/10 backdrop-blur-xl shadow-[0_26px_90px_rgba(2,6,23,0.32)];
+    @apply rounded-lg bg-zinc-950/90 ring-1 ring-white/10 shadow-[0_14px_36px_rgba(0,0,0,0.26)];
   }
 
   .surface-soft {
-    @apply bg-white/5 ring-1 ring-white/10;
+    @apply bg-white/[0.06] ring-1 ring-white/10;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center rounded-2xl font-black tracking-wide transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70;
+    @apply inline-flex items-center justify-center rounded-lg font-black tracking-wide transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70;
   }
 
   .btn-primary {
-    @apply btn bg-cyan-300 text-slate-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply btn bg-cyan-300 text-zinc-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply btn bg-white/10 text-white hover:bg-white/15 ring-1 ring-white/15 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply btn bg-white/[0.08] text-white hover:bg-white/[0.12] ring-1 ring-white/15 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-danger {
@@ -104,11 +92,11 @@ select {
   }
 
   .field {
-    @apply w-full rounded-2xl bg-black/35 text-white px-4 py-3 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-300/60;
+    @apply w-full rounded-lg bg-black/35 text-white px-4 py-3 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-300/60;
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em];
+    @apply inline-flex items-center rounded-md px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em];
   }
 
   .badge-muted {
@@ -128,28 +116,29 @@ select {
   }
 
   .display-shell {
-    @apply h-screen w-screen bg-black flex items-center justify-center overflow-hidden relative;
+    @apply h-screen w-screen bg-black flex items-center justify-center overflow-hidden relative text-white;
   }
 
   .display-stage {
-    @apply absolute inset-0 p-4 md:p-8;
-  }
-
-  .display-topbar {
-    @apply absolute top-5 left-5 right-5 md:top-8 md:left-8 md:right-8 z-20 flex items-start justify-between gap-4 rounded-full bg-black/45 px-5 py-3 backdrop-blur-xl ring-1 ring-white/10;
+    @apply absolute inset-0 p-0;
   }
 
   .display-status-banner {
-    @apply absolute bottom-5 left-5 right-5 md:bottom-8 md:left-8 md:right-8 z-20 rounded-full bg-black/55 px-5 py-3 text-white/80 backdrop-blur-xl ring-1 ring-white/10 text-sm font-medium;
+    @apply pointer-events-none absolute right-4 z-30 max-w-[min(520px,calc(100vw-2rem))] rounded-lg bg-black/90 px-4 py-3 text-white/90 ring-1 ring-amber-300/30 text-sm font-medium shadow-[0_12px_32px_rgba(0,0,0,0.35)];
+    top: max(1rem, env(safe-area-inset-top));
   }
 
   .stage-shell {
-    @apply relative overflow-hidden rounded-[28px] ring-1 ring-white/10 h-full w-full;
+    @apply relative overflow-hidden rounded-lg ring-1 ring-white/10 h-full w-full;
     animation: stageFadeIn 220ms ease-out;
   }
 
+  .stage-shell-broadcast {
+    @apply rounded-none ring-0 shadow-none;
+  }
+
   .stage-empty {
-    @apply h-full w-full flex items-center justify-center text-white/60 bg-black/70 backdrop-blur-sm;
+    @apply h-full w-full flex items-center justify-center text-white/60 bg-black/90;
   }
 
   .stage-title-panel {
@@ -169,7 +158,7 @@ select {
   }
 
   .stage-answer-panel {
-    @apply rounded-[28px] bg-black/55 backdrop-blur-xl ring-1 ring-white/10 p-5 md:p-8 max-w-2xl;
+    @apply rounded-lg bg-black/75 ring-1 ring-white/10 p-5 md:p-8 max-w-2xl;
   }
 
   .stage-answer {
@@ -181,7 +170,7 @@ select {
   }
 
   .stage-lower-third {
-    @apply absolute left-4 right-4 bottom-4 md:left-8 md:right-8 md:bottom-8 rounded-[24px] bg-black/45 backdrop-blur-xl ring-1 ring-white/10 px-5 py-4 flex items-end justify-between gap-4;
+    @apply absolute left-4 right-4 bottom-4 md:left-8 md:right-8 md:bottom-8 rounded-lg bg-black/80 ring-1 ring-white/10 px-5 py-4 flex items-end justify-between gap-4;
   }
 
   .stage-lower-title {
@@ -203,29 +192,15 @@ select {
   }
 
   .theme-studio {
-    background:
-      radial-gradient(70% 70% at 20% 0%, rgba(34, 211, 238, 0.18), transparent 55%),
-      radial-gradient(60% 65% at 80% 20%, rgba(245, 158, 11, 0.18), transparent 50%),
-      linear-gradient(180deg, rgba(5, 11, 22, 0.65), rgba(5, 11, 22, 0.3));
+    background: #10141d;
   }
 
   .theme-minimal {
-    background:
-      linear-gradient(180deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.58)),
-      linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+    background: #08090c;
   }
 
   .theme-retro {
-    background:
-      radial-gradient(75% 75% at 50% 0%, rgba(251, 191, 36, 0.2), transparent 58%),
-      linear-gradient(180deg, rgba(18, 27, 43, 0.15), rgba(18, 27, 43, 0.62)),
-      repeating-linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0.02) 0,
-        rgba(255, 255, 255, 0.02) 2px,
-        rgba(0, 0, 0, 0) 2px,
-        rgba(0, 0, 0, 0) 24px
-      );
+    background: #16120d;
   }
 
   @keyframes revealFlip {

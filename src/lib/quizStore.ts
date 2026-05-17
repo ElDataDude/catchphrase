@@ -1,4 +1,4 @@
-import { duplicateQuiz, ensureQuizV2, exportQuizBundle, parseQuizBundle } from './quizSchema';
+import { copyQuestionWithFreshId, duplicateQuiz, ensureQuizV2, exportQuizBundle, parseQuizBundle } from './quizSchema';
 
 const DB_NAME = 'catchphrase-v2';
 const DB_VERSION = 1;
@@ -168,9 +168,11 @@ export const downloadQuizBundle = async (quizId: string) => {
 };
 
 export const importQuizBundleFromText = async (raw: string) => {
+  const parsed = parseQuizBundle(raw);
   const imported = ensureQuizV2({
-    ...parseQuizBundle(raw),
-    id: undefined
+    ...parsed,
+    id: undefined,
+    questions: parsed.questions.map(copyQuestionWithFreshId)
   });
   return saveQuiz(imported);
 };

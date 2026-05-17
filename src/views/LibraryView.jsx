@@ -60,14 +60,14 @@ const LibraryView = () => {
   };
 
   return (
-    <div className="page-shell space-y-6">
-      <div className="surface-strong p-5 flex flex-wrap items-center justify-between gap-4">
+    <div className="page-shell space-y-4">
+      <div className="surface-strong p-4 md:p-5 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="text-white/50 uppercase tracking-[0.2em] text-xs">Library</div>
-          <h1 className="text-white font-black text-3xl">Local Quiz Library</h1>
-          <p className="text-white/60">All locally stored quizzes, sorted by most recently opened.</p>
+          <div className="text-white/50 uppercase tracking-[0.18em] text-xs">Library</div>
+          <h1 className="text-white font-black text-2xl md:text-3xl">Local Quiz Library</h1>
+          <p className="text-white/65 text-sm md:text-base">Sorted by most recently opened. Launch, edit, export, or duplicate without leaving this screen.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={() => navigate('/')}>
             Dashboard
           </button>
@@ -77,9 +77,22 @@ const LibraryView = () => {
         </div>
       </div>
 
-      <div className="surface-strong p-5 space-y-4">
+      <div className="surface-strong p-4 md:p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-white font-bold">Profiles</div>
+          <div>
+            <div className="text-white font-bold">Profiles</div>
+            <div className="text-white/55 text-sm">
+              Showing
+              {' '}
+              {filteredQuizzes.length}
+              {' '}
+              of
+              {' '}
+              {quizzes.length}
+              {' '}
+              quizzes
+            </div>
+          </div>
           <select className="field max-w-[220px]" value={selectedProfile} onChange={(event) => setSelectedProfile(event.target.value)}>
             <option value="all">All profiles</option>
             {profiles.map((profile) => (
@@ -92,13 +105,13 @@ const LibraryView = () => {
 
         <div className="grid gap-3">
           {filteredQuizzes.length === 0 && (
-            <div className="surface-soft rounded-2xl p-4 text-white/65">No quizzes match this filter.</div>
+            <div className="surface-soft rounded-lg p-4 text-white/65">No quizzes match this filter.</div>
           )}
 
           {filteredQuizzes.map((quiz) => (
-            <div key={quiz.id} className="surface-soft rounded-2xl p-4">
+            <div key={quiz.id} className="surface-soft rounded-lg p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="text-white font-bold text-lg">{quiz.name}</div>
                   <div className="text-white/55 text-sm">
                     {quiz.username}
@@ -122,9 +135,9 @@ const LibraryView = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap sm:justify-end">
                   <button type="button" className="btn-primary px-4 py-3 text-sm" onClick={() => navigate(`/quiz/${quiz.id}?view=controller`)}>
-                    Open
+                    Run
                   </button>
                   <button type="button" className="btn-secondary px-4 py-3 text-sm" onClick={() => navigate(`/quiz/${quiz.id}/edit`)}>
                     Edit

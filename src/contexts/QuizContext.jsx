@@ -32,8 +32,43 @@ const QuizContext = createContext(null);
 
 const clampPresence = (value) => Math.max(0, Number(value || 0));
 
+const syncVersionNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+export const normalizeProviderQuiz = (quiz) => {
+  const normalized = ensureQuizV2(quiz);
+  return quiz?.isPlaceholder
+    ? {
+        ...normalized,
+        isPlaceholder: true
+      }
+    : normalized;
+};
+
+export const getSyncedQuizUpdate = (currentState, incomingState, role = 'controller', hasAppliedRemoteState = true) => {
+  if (!incomingState?.id) return null;
+
+  const normalized = ensureQuizV2(incomingState);
+  const expectedId = currentState?.id || normalized.id;
+  if (expectedId !== normalized.id) return null;
+
+  const currentVersion = syncVersionNumber(currentState?.liveState?.syncVersion, -1);
+  const incomingVersion = syncVersionNumber(normalized.liveState?.syncVersion, 0);
+
+  const isFirstDisplaySnapshot = role === 'display' && !hasAppliedRemoteState;
+  const isDisplayPlaceholder = role === 'display' && currentState?.isPlaceholder;
+
+  if (incomingVersion <= currentVersion && !isFirstDisplaySnapshot && !isDisplayPlaceholder) {
+    return null;
+  }
+
+  return normalized;
+};
+
 export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostPeerId = null }) => {
-  const [state, baseDispatch] = useReducer(quizReducer, initialQuiz, ensureQuizV2);
+  const [state, baseDispatch] = useReducer(quizReducer, initialQuiz, normalizeProviderQuiz);
   const [presence, setPresence] = useState({
     controller: role === 'controller' ? 1 : 0,
     display: role === 'display' ? 1 : 0
@@ -48,6 +83,7 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
   const remotePresenceRef = useRef({ controller: 0, display: 0 });
   const lastRemoteStateAtRef = useRef(Date.now());
   const isApplyingRemoteRef = useRef(false);
+  const hasAppliedRemoteStateRef = useRef(role !== 'display');
 
   const resolvedHostPeerId = useMemo(() => {
     if (!state?.id || role !== 'controller') return hostPeerId;
@@ -81,19 +117,16 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
 
   const applySyncedState = useCallback(
     (incomingState) => {
-      if (!incomingState?.id) return false;
-      const normalized = ensureQuizV2(incomingState);
-      const expectedId = stateRef.current?.id || normalized.id;
-      if (expectedId !== normalized.id) return false;
-
-      const currentVersion = Number(stateRef.current?.liveState?.syncVersion || -1);
-      const incomingVersion = Number(normalized.liveState?.syncVersion || 0);
-
-      if (role === 'display' && incomingVersion <= currentVersion && !stateRef.current?.isPlaceholder) {
-        return false;
-      }
+      const normalized = getSyncedQuizUpdate(
+        stateRef.current,
+        incomingState,
+        role,
+        hasAppliedRemoteStateRef.current
+      );
+      if (!normalized) return false;
 
       isApplyingRemoteRef.current = true;
+      hasAppliedRemoteStateRef.current = true;
       baseDispatch({
         type: 'LOAD_QUIZ',
         payload: {
@@ -115,6 +148,10 @@ export const QuizProvider = ({ children, initialQuiz, role = 'controller', hostP
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    hasAppliedRemoteStateRef.current = role !== 'display';
+  }, [role, state?.id]);
 
   useEffect(() => {
     refreshPresence();
